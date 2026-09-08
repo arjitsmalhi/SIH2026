@@ -101,6 +101,16 @@ const i18n = {
       noSubmissionsYet: 'No quiz submissions synced yet. Connect with students to sync their results.',
       
       // General UI
+      dashboard: 'Dashboard',
+      menu: 'Menu',
+      helpAbout: 'Help / About',
+      switchRole: 'Switch Role',
+      navigation: 'Navigation',
+      aboutTitle: 'About EduSync',
+      aboutDesc: 'EduSync is an offline-first educational platform designed for rural schools. It enables teachers and students to share lessons, complete quizzes, and sync student scores peer-to-peer using Bluetooth without needing any internet connection.',
+      versionLabel: 'Version',
+      appMode: 'Mode',
+      offlineMeshReady: '100% Offline P2P Mesh',
       back: 'Back',
       close: 'Close',
       save: 'Save',
@@ -210,6 +220,16 @@ const i18n = {
       noSubmissionsYet: 'अभी कोई परिणाम सिंक नहीं हुआ है। विद्यार्थियों से कनेक्ट करके सिंक करें।',
       
       // General UI
+      dashboard: 'डैशबोर्ड',
+      menu: 'मेनू',
+      helpAbout: 'सहायता / विवरण',
+      switchRole: 'भूमिका बदलें',
+      navigation: 'नेविगेशन',
+      aboutTitle: 'एडुसिंक के बारे में',
+      aboutDesc: 'एडुसिंक ग्रामीण विद्यालयों के लिए डिज़ाइन किया गया एक ऑफ़लाइन शिक्षा मंच है। यह शिक्षकों और विद्यार्थियों को बिना इंटरनेट ब्लूटूथ के माध्यम से पाठ साझा करने, क्विज़ हल करने और अंक सिंक करने की सुविधा देता है।',
+      versionLabel: 'संस्करण',
+      appMode: 'मोड',
+      offlineMeshReady: '100% ऑफ़लाइन पीयर-टू-पीयर',
       back: 'वापस',
       close: 'बंद करें',
       save: 'सहेजें',
