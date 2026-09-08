@@ -49,6 +49,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -104,6 +106,9 @@ public class BluetoothP2PPlugin extends Plugin {
     private DataInputStream socketReader;
     private Thread serverAcceptThread;
     private Thread socketWorkerThread;
+    private final Map<String, Thread> clientReaderThreads = new ConcurrentHashMap<>();
+    private final Map<String, SocketSession> clientSessions = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, BluetoothDevice> connectedGattDevices = new ConcurrentHashMap<>();
 
     private boolean isAdvertising = false;
     private boolean isScanning = false;
@@ -116,6 +121,16 @@ public class BluetoothP2PPlugin extends Plugin {
 
     private final Map<String, JSObject> discoveredPeers = new HashMap<>();
     private final ExecutorService executor = Executors.newCachedThreadPool();
+
+    private static class SocketSession {
+        final BluetoothSocket socket;
+        final DataOutputStream writer;
+
+        SocketSession(BluetoothSocket socket, DataOutputStream writer) {
+            this.socket = socket;
+            this.writer = writer;
+        }
+    }
 
     private void safeNotifyListeners(String eventName, JSObject data) {
         try {
@@ -346,34 +361,61 @@ public class BluetoothP2PPlugin extends Plugin {
         stopRfcommServer();
 
         serverAcceptThread = new Thread(() -> {
-            try {
-                if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
-                    return;
-                }
-                serverSocket = bluetoothAdapter.listenUsingInsecureRfcommWithServiceRecord("EduSyncTeacher", SPP_UUID);
-                Log.i(TAG, "RFCOMM Server Socket listening for Student connections on UUID: " + SPP_UUID);
+            while (!Thread.currentThread().isInterrupted() && isAdvertising) {
+                BluetoothServerSocket listeningSocket = null;
+                try {
+                    if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
+                        break;
+                    }
 
-                while (!Thread.currentThread().isInterrupted() && serverSocket != null) {
-                    try {
-                        BluetoothSocket socket = serverSocket.accept();
+                    listeningSocket = bluetoothAdapter.listenUsingInsecureRfcommWithServiceRecord("EduSyncTeacher", SPP_UUID);
+                    synchronized (BluetoothP2PPlugin.this) {
+                        serverSocket = listeningSocket;
+                    }
+                    Log.i(TAG, "RFCOMM Server Socket listening for Student connections on UUID: " + SPP_UUID);
+
+                    while (!Thread.currentThread().isInterrupted() && isAdvertising) {
+                        BluetoothSocket socket = listeningSocket.accept();
                         if (socket != null) {
                             BluetoothDevice remoteDevice = safeGetRemoteDevice(socket);
                             String clientAddr = safeGetAddress(remoteDevice);
                             Log.i(TAG, "Accepted RFCOMM connection from: " + clientAddr);
                             handleIncomingClientSocket(socket);
-                            // Break accept loop while active socket session is handling connection
-                            break;
                         }
-                    } catch (IOException e) {
+                    }
+                } catch (IOException e) {
+                    if (Thread.currentThread().isInterrupted() || !isAdvertising) {
                         Log.i(TAG, "RFCOMM accept loop finished: " + e.getMessage());
                         break;
-                    } catch (Throwable t) {
-                        Log.w(TAG, "RFCOMM accept loop notice: " + t.getMessage());
+                    }
+                    Log.w(TAG, "RFCOMM server socket failed; recreating listener: " + e.getMessage());
+                } catch (Throwable t) {
+                    if (Thread.currentThread().isInterrupted() || !isAdvertising) {
+                        Log.w(TAG, "RFCOMM accept loop stopped: " + t.getMessage());
+                        break;
+                    }
+                    Log.w(TAG, "RFCOMM server error; recreating listener: " + t.getMessage());
+                } finally {
+                    try {
+                        if (listeningSocket != null) {
+                            listeningSocket.close();
+                        }
+                    } catch (Throwable ignored) {}
+                    synchronized (BluetoothP2PPlugin.this) {
+                        if (serverSocket == listeningSocket) {
+                            serverSocket = null;
+                        }
+                    }
+                }
+
+                if (!Thread.currentThread().isInterrupted() && isAdvertising) {
+                    try {
+                        Thread.sleep(250);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
                         break;
                     }
                 }
-            } catch (Throwable e) {
-                Log.w(TAG, "RFCOMM Server exception: " + e.getMessage());
             }
         }, "EduSync-ServerAcceptThread");
 
@@ -424,18 +466,16 @@ public class BluetoothP2PPlugin extends Plugin {
                     errObj.put("reason", "Incorrect 4-digit code");
                     safeNotifyListeners("pairingFailed", errObj);
                     try { socket.close(); } catch (Throwable ignored) {}
-                    if (isAdvertising) startRfcommServerSocket();
                     return;
                 }
 
                 // Successful Pairing!
-                activeSocket = socket;
-                socketReader = in;
-                socketWriter = out;
-                connectedRemoteDevice = device;
-
+                String sessionAddress = addr.equals("UNKNOWN")
+                        ? "socket_" + Integer.toHexString(System.identityHashCode(socket))
+                        : addr;
                 String studentName = hsObj.optString("studentName", safeGetName(device, "Student (" + (addr.length() > 5 ? addr.substring(addr.length() - 5) : addr) + ")"));
                 Log.i(TAG, "RFCOMM Student Connected and Paired: " + studentName);
+                clientSessions.put(sessionAddress, new SocketSession(socket, out));
 
                 JSObject connObj = new JSObject();
                 connObj.put("address", addr);
@@ -446,20 +486,19 @@ public class BluetoothP2PPlugin extends Plugin {
                 safeNotifyListeners("peerConnected", connObj);
 
                 // Start Socket Reader Loop
-                startSocketReaderLoop(socket, in);
+                startSocketReaderLoop(socket, in, sessionAddress);
 
             } catch (Throwable e) {
                 Log.e(TAG, "Error during student handshake: " + e.getMessage());
                 try {
                     socket.close();
                 } catch (Throwable ignored) {}
-                if (isAdvertising) startRfcommServerSocket();
             }
         });
     }
 
-    private void startSocketReaderLoop(BluetoothSocket socket, DataInputStream in) {
-        socketWorkerThread = new Thread(() -> {
+    private void startSocketReaderLoop(BluetoothSocket socket, DataInputStream in, String sessionAddress) {
+        Thread readerThread = new Thread(() -> {
             try {
                 BluetoothDevice device = safeGetRemoteDevice(socket);
                 String addr = safeGetAddress(device);
@@ -506,21 +545,20 @@ public class BluetoothP2PPlugin extends Plugin {
                         socketWriter = null;
                         socketReader = null;
                     }
+                    clientSessions.remove(sessionAddress);
+                    clientReaderThreads.remove(sessionAddress);
                     JSObject discObj = new JSObject();
-                    discObj.put("address", addr);
+                    discObj.put("address", sessionAddress);
                     safeNotifyListeners("peerDisconnected", discObj);
 
-                    // Re-open server socket for next incoming student if advertising
-                    if (isAdvertising) {
-                        startRfcommServerSocket();
-                    }
                 }
             } catch (Throwable outer) {
                 Log.w(TAG, "Unhandled in socketWorkerThread: " + outer.getMessage());
             }
-        }, "EduSync-SocketWorker");
+        }, "EduSync-SocketWorker-" + sessionAddress.replace(':', '_'));
 
-        socketWorkerThread.start();
+        clientReaderThreads.put(sessionAddress, readerThread);
+        readerThread.start();
     }
 
     private final AdvertiseCallback advertiseCallback = new AdvertiseCallback() {
@@ -591,9 +629,11 @@ public class BluetoothP2PPlugin extends Plugin {
                 String addr = safeGetAddress(device);
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
                     connectedRemoteDevice = device;
+                    connectedGattDevices.put(addr, device);
                     Log.i(TAG, "GATT Client connected: " + addr);
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     Log.i(TAG, "GATT Client disconnected.");
+                    connectedGattDevices.remove(addr);
                     if (activeSocket == null) {
                         JSObject obj = new JSObject();
                         obj.put("address", addr);
@@ -639,6 +679,7 @@ public class BluetoothP2PPlugin extends Plugin {
 
                     if (matches) {
                         connectedRemoteDevice = device;
+                        connectedGattDevices.put(addr, device);
                         safeNotifyListeners("peerConnected", obj);
                     } else {
                         safeNotifyListeners("pairingFailed", obj);
@@ -924,41 +965,54 @@ public class BluetoothP2PPlugin extends Plugin {
 
         executor.execute(() -> {
             try {
-                // Step 1: Attempt High-Speed RFCOMM Socket Connection
-                try {
-                    Log.i(TAG, "Attempting RFCOMM Socket connection to: " + address);
-                    BluetoothSocket socket = finalDevice.createInsecureRfcommSocketToServiceRecord(SPP_UUID);
-                    socket.connect();
+                boolean connected = false;
+                Throwable lastConnectionError = null;
+                for (int attempt = 1; attempt <= 3 && !connected; attempt++) {
+                    BluetoothSocket socket = null;
+                    try {
+                        Log.i(TAG, "Attempting RFCOMM Socket connection to " + address + " (attempt " + attempt + ")");
+                        socket = finalDevice.createInsecureRfcommSocketToServiceRecord(SPP_UUID);
+                        socket.connect();
 
-                    DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-                    DataInputStream in = new DataInputStream(socket.getInputStream());
+                        DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+                        DataInputStream in = new DataInputStream(socket.getInputStream());
 
-                    // Send Handshake with 4-Digit Pairing Code
-                    JSONObject hsObj = new JSONObject();
-                    hsObj.put("type", "HANDSHAKE");
-                    hsObj.put("pairingCode", pairingCode);
-                    hsObj.put("studentName", studentName);
+                        JSONObject hsObj = new JSONObject();
+                        hsObj.put("type", "HANDSHAKE");
+                        hsObj.put("pairingCode", pairingCode);
+                        hsObj.put("studentName", studentName);
 
-                    byte[] hsBytes = hsObj.toString().getBytes(StandardCharsets.UTF_8);
-                    out.writeInt(hsBytes.length);
-                    out.write(hsBytes);
-                    out.flush();
+                        byte[] hsBytes = hsObj.toString().getBytes(StandardCharsets.UTF_8);
+                        out.writeInt(hsBytes.length);
+                        out.write(hsBytes);
+                        out.flush();
 
-                    // Read Teacher Response
-                    int respLen = in.readInt();
-                    byte[] respBytes = new byte[respLen];
-                    in.readFully(respBytes);
-                    JSONObject respObj = new JSONObject(new String(respBytes, StandardCharsets.UTF_8));
+                        int respLen = in.readInt();
+                        if (respLen <= 0 || respLen > 1024 * 1024) {
+                            throw new IOException("Invalid teacher handshake response length: " + respLen);
+                        }
+                        byte[] respBytes = new byte[respLen];
+                        in.readFully(respBytes);
+                        JSONObject respObj = new JSONObject(new String(respBytes, StandardCharsets.UTF_8));
 
-                    boolean verified = respObj.optBoolean("success", false);
-                    if (verified) {
+                        boolean verified = respObj.optBoolean("success", false);
+                        if (!verified) {
+                            Log.w(TAG, "Teacher rejected pairing code: " + pairingCode);
+                            JSObject failObj = new JSObject();
+                            failObj.put("peerAddress", address);
+                            failObj.put("reason", respObj.optString("error", "Incorrect 4-digit verification code."));
+                            safeNotifyListeners("pairingFailed", failObj);
+                            try { socket.close(); } catch (Throwable ignored) {}
+                            return;
+                        }
+
                         activeSocket = socket;
                         socketWriter = out;
                         socketReader = in;
                         connectedRemoteDevice = finalDevice;
+                        connected = true;
 
                         Log.i(TAG, "RFCOMM Socket Connected and Verified with Teacher!");
-
                         JSObject connObj = new JSObject();
                         connObj.put("address", address);
                         connObj.put("name", respObj.optString("teacherName", safeGetName(finalDevice, "Teacher")));
@@ -966,23 +1020,27 @@ public class BluetoothP2PPlugin extends Plugin {
                         connObj.put("isRFCOMM", true);
                         connObj.put("success", true);
                         safeNotifyListeners("peerConnected", connObj);
-
-                        startSocketReaderLoop(socket, in);
-                        return;
-                    } else {
-                        Log.w(TAG, "Teacher rejected pairing code: " + pairingCode);
-                        JSObject failObj = new JSObject();
-                        failObj.put("peerAddress", address);
-                        failObj.put("reason", respObj.optString("error", "Incorrect 4-digit verification code."));
-                        safeNotifyListeners("pairingFailed", failObj);
-                        try { socket.close(); } catch (Throwable ignored) {}
-                        return;
+                        startSocketReaderLoop(socket, in, address);
+                    } catch (Throwable e) {
+                        lastConnectionError = e;
+                        if (socket != null) {
+                            try { socket.close(); } catch (Throwable ignored) {}
+                        }
+                        if (attempt < 3) {
+                            try { Thread.sleep(400L * attempt); } catch (InterruptedException interrupted) {
+                                Thread.currentThread().interrupt();
+                                break;
+                            }
+                        }
                     }
-                } catch (Throwable e) {
-                    Log.w(TAG, "RFCOMM connection attempt failed (" + e.getMessage() + "). Falling back to BLE GATT...");
                 }
 
-                // Step 2: Fallback to BLE GATT Connection
+                if (connected) {
+                    return;
+                }
+                if (lastConnectionError != null) {
+                    Log.w(TAG, "RFCOMM connection attempts exhausted (" + lastConnectionError.getMessage() + "). Falling back to BLE GATT...");
+                }
                 connectViaGatt(finalDevice, pairingCode);
             } catch (Throwable outer) {
                 Log.e(TAG, "Error in connectToPeer executor: " + outer.getMessage());
@@ -1115,6 +1173,33 @@ public class BluetoothP2PPlugin extends Plugin {
 
         byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
 
+        // Broadcast teacher packets to every connected student session.
+        if (!clientSessions.isEmpty()) {
+            int sentCount = 0;
+            for (Map.Entry<String, SocketSession> entry : clientSessions.entrySet()) {
+                try {
+                    DataOutputStream writer = entry.getValue().writer;
+                    synchronized (writer) {
+                        writer.writeInt(bytes.length);
+                        writer.write(bytes);
+                        writer.flush();
+                    }
+                    sentCount++;
+                } catch (Throwable e) {
+                    Log.w(TAG, "Socket write notice for " + entry.getKey() + ": " + e.getMessage());
+                    clientSessions.remove(entry.getKey());
+                }
+            }
+            if (sentCount > 0) {
+                JSObject ret = new JSObject();
+                ret.put("sent", true);
+                ret.put("transport", "RFCOMM");
+                ret.put("peerCount", sentCount);
+                call.resolve(ret);
+                return;
+            }
+        }
+
         // Case 1: Active High-Speed RFCOMM Socket Stream
         if (socketWriter != null) {
             try {
@@ -1151,19 +1236,31 @@ public class BluetoothP2PPlugin extends Plugin {
                 }
             }
 
-            // Case 3: BLE GATT Server to Client
-            if (gattServer != null && connectedRemoteDevice != null) {
+            // Case 3: Broadcast through the BLE GATT server to every connected student.
+            if (gattServer != null && !connectedGattDevices.isEmpty()) {
                 BluetoothGattService service = gattServer.getService(SERVICE_UUID);
                 if (service != null) {
                     BluetoothGattCharacteristic dataChar = service.getCharacteristic(CHAR_DATA_UUID);
                     if (dataChar != null) {
-                        dataChar.setValue(bytes);
-                        gattServer.notifyCharacteristicChanged(connectedRemoteDevice, dataChar, false);
-                        JSObject ret = new JSObject();
-                        ret.put("sent", true);
-                        ret.put("transport", "BLE_GATT_SERVER");
-                        call.resolve(ret);
-                        return;
+                        int sentCount = 0;
+                        for (Map.Entry<String, BluetoothDevice> entry : connectedGattDevices.entrySet()) {
+                            try {
+                                dataChar.setValue(bytes);
+                                if (gattServer.notifyCharacteristicChanged(entry.getValue(), dataChar, false)) {
+                                    sentCount++;
+                                }
+                            } catch (Throwable e) {
+                                Log.w(TAG, "BLE notification failed for " + entry.getKey() + ": " + e.getMessage());
+                            }
+                        }
+                        if (sentCount > 0) {
+                            JSObject ret = new JSObject();
+                            ret.put("sent", true);
+                            ret.put("transport", "BLE_GATT_SERVER");
+                            ret.put("peerCount", sentCount);
+                            call.resolve(ret);
+                            return;
+                        }
                     }
                 }
             }
@@ -1177,6 +1274,15 @@ public class BluetoothP2PPlugin extends Plugin {
     @PluginMethod
     public void disconnect(PluginCall call) {
         try {
+            for (SocketSession session : clientSessions.values()) {
+                try { session.socket.close(); } catch (Throwable ignored) {}
+            }
+            clientSessions.clear();
+            connectedGattDevices.clear();
+            for (Thread readerThread : clientReaderThreads.values()) {
+                try { readerThread.interrupt(); } catch (Throwable ignored) {}
+            }
+            clientReaderThreads.clear();
             if (activeSocket != null) {
                 try {
                     activeSocket.close();

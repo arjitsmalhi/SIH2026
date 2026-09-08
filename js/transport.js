@@ -17,6 +17,7 @@ class EduSyncTransport {
     };
 
     this.connectedPeer = null;
+    this.connectedPeers = new Map();
     this.isConnected = false;
     this.isTransferring = false;
     this.isPaused = false;
@@ -109,7 +110,7 @@ class EduSyncTransport {
 
     bt.addListener('peerDisconnected', (data) => {
       console.log('[Bluetooth] Peer Disconnected:', data);
-      this.disconnect(false);
+      this.removeConnectedPeer(data?.address || data?.peerAddress);
     });
 
     bt.addListener('chunkReceived', (data) => {
@@ -298,9 +299,28 @@ class EduSyncTransport {
   }
 
   setConnectedPeer(peer) {
+    const peerId = peer.address || peer.id;
+    if (peerId) {
+      this.connectedPeers.set(peerId, peer);
+    }
     this.connectedPeer = peer;
-    this.isConnected = true;
+    this.isConnected = this.connectedPeers.size > 0;
     this.emit('peerConnected', peer);
+  }
+
+  removeConnectedPeer(peerId) {
+    if (peerId) {
+      this.connectedPeers.delete(peerId);
+    } else {
+      this.connectedPeers.clear();
+    }
+    this.connectedPeer = this.connectedPeers.values().next().value || null;
+    this.isConnected = this.connectedPeers.size > 0;
+    this.emit('peerDisconnected', peerId);
+  }
+
+  getConnectedPeers() {
+    return Array.from(this.connectedPeers.values());
   }
 
   async disconnect(notifyNative = true) {
@@ -317,6 +337,7 @@ class EduSyncTransport {
       });
     }
 
+    this.connectedPeers.clear();
     this.connectedPeer = null;
     this.isConnected = false;
     this.isTransferring = false;

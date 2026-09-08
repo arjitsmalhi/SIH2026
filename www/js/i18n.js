@@ -100,40 +100,6 @@ const i18n = {
       activeLearners: 'Active Learners',
       noSubmissionsYet: 'No quiz submissions synced yet. Connect with students to sync their results.',
       
-      // Notes & Doubts
-      studyNotes: 'Study Notes & Doubts',
-      myNotes: 'My Notes',
-      addNote: 'Add Note / Doubt',
-      noteTitle: 'Note / Doubt Title',
-      noteContent: 'Write your notes or questions here...',
-      saveNote: 'Save Note',
-      noNotesYet: 'No notes added yet. Keep study notes and questions offline!',
-      
-      // Quiz Creation & Timed Quiz
-      createQuiz: 'Create Quiz',
-      createNewQuiz: 'Create New Offline Quiz',
-      quizTimeLimit: 'Time Limit',
-      minutes: 'minutes',
-      timeRemaining: 'Time Remaining',
-      timesUp: "Time's Up!",
-      timesUpMsg: 'Quiz time has expired. Submitting your answers now.',
-      addQuestion: 'Add Question',
-      question: 'Question',
-      options: 'Options',
-      correctAnswer: 'Correct Answer',
-      explanation: 'Explanation / Hint',
-
-      // Menu & Settings
-      menu: 'Menu',
-      theme: 'Theme',
-      lightMode: 'Light Mode',
-      darkMode: 'Dark Mode',
-      switchRole: 'Switch Role',
-      currentRole: 'Current Role',
-      aboutApp: 'About EduSync',
-      version: 'Version',
-      attachPdf: 'Select PDF File',
-
       // General UI
       back: 'Back',
       close: 'Close',
@@ -143,8 +109,8 @@ const i18n = {
       switchLanguage: 'हिंदी में बदलें',
       status: 'Status',
       mode: 'Mode',
-      offlineModeBadge: 'Offline Ready',
-      p2pActiveBadge: 'P2P Ready'
+      offlineModeBadge: '100% Offline Ready',
+      p2pActiveBadge: 'P2P Mesh Ready'
     },
     hi: {
       appName: 'एडुसिंक (EduSync)',
@@ -243,40 +209,6 @@ const i18n = {
       activeLearners: 'सक्रिय शिक्षार्थी',
       noSubmissionsYet: 'अभी कोई परिणाम सिंक नहीं हुआ है। विद्यार्थियों से कनेक्ट करके सिंक करें।',
       
-      // Notes & Doubts
-      studyNotes: 'नोट्स और संदेह',
-      myNotes: 'मेरे नोट्स',
-      addNote: 'नोट / संदेह जोड़ें',
-      noteTitle: 'नोट का शीर्षक',
-      noteContent: 'अपने अध्ययन नोट्स या प्रश्न यहाँ लिखें...',
-      saveNote: 'नोट सहेजें',
-      noNotesYet: 'अभी कोई नोट नहीं है। अपने प्रश्न और नोट्स ऑफ़लाइन सुरक्षित रखें!',
-      
-      // Quiz Creation & Timed Quiz
-      createQuiz: 'क्विज़ बनाएं',
-      createNewQuiz: 'नया ऑफ़लाइन क्विज़ बनाएं',
-      quizTimeLimit: 'समय सीमा',
-      minutes: 'मिनट',
-      timeRemaining: 'शेष समय',
-      timesUp: 'समय समाप्त!',
-      timesUpMsg: 'क्विज़ का समय समाप्त हो गया है। आपके उत्तर जमा किए जा रहे हैं।',
-      addQuestion: 'प्रश्न जोड़ें',
-      question: 'प्रश्न',
-      options: 'विकल्प',
-      correctAnswer: 'सही उत्तर',
-      explanation: 'संकेत / व्याख्या',
-
-      // Menu & Settings
-      menu: 'मेनू',
-      theme: 'थीम',
-      lightMode: 'लाइट मोड',
-      darkMode: 'डार्क मोड',
-      switchRole: 'भूमिका बदलें',
-      currentRole: 'वर्तमान भूमिका',
-      aboutApp: 'एडुसिंक के बारे में',
-      version: 'संस्करण',
-      attachPdf: 'पीडीएफ़ फ़ाइल चुनें',
-
       // General UI
       back: 'वापस',
       close: 'बंद करें',
@@ -286,7 +218,7 @@ const i18n = {
       switchLanguage: 'Switch to English',
       status: 'स्थिति',
       mode: 'मोड',
-      offlineModeBadge: 'ऑफ़लाइन तैयार',
+      offlineModeBadge: '100% ऑफ़लाइन तैयार',
       p2pActiveBadge: 'पीयर-टू-पीयर तैयार'
     }
   },

@@ -1,6 +1,6 @@
 // EduSync Local Database & Offline Storage Layer (IndexedDB with Fallback)
 const DB_NAME = 'EduSyncOfflineDB';
-const DB_VERSION = 2;
+const DB_VERSION = 1;
 
 class EduSyncDatabase {
   constructor() {
@@ -39,14 +39,6 @@ class EduSyncDatabase {
         // Sync History Store
         if (!db.objectStoreNames.contains('sync_logs')) {
           db.createObjectStore('sync_logs', { keyPath: 'id', autoIncrement: true });
-        }
-
-        // Student Study Notes & Doubts Store
-        if (!db.objectStoreNames.contains('notes')) {
-          const notesStore = db.createObjectStore('notes', { keyPath: 'id', autoIncrement: true });
-          notesStore.createIndex('studentId', 'studentId', { unique: false });
-          notesStore.createIndex('resourceId', 'resourceId', { unique: false });
-          notesStore.createIndex('createdAt', 'createdAt', { unique: false });
         }
       };
 
@@ -464,16 +456,6 @@ class EduSyncDatabase {
     });
   }
 
-  async deleteQuiz(quizId) {
-    return new Promise((resolve, reject) => {
-      const tx = this.db.transaction(['quizzes'], 'readwrite');
-      const store = tx.objectStore('quizzes');
-      const req = store.delete(quizId);
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
   // --- Submissions / Results Methods ---
   async saveQuizSubmission(submission) {
     return new Promise((resolve, reject) => {
@@ -514,62 +496,6 @@ class EduSyncDatabase {
         }
       };
     }
-  }
-
-  // --- Student Study Notes & Doubts Methods ---
-  async addNote(note) {
-    return new Promise((resolve, reject) => {
-      const tx = this.db.transaction(['notes'], 'readwrite');
-      const store = tx.objectStore('notes');
-      const noteRecord = {
-        ...note,
-        createdAt: note.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      const req = store.put(noteRecord);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  async getAllNotes(studentId = null) {
-    return new Promise((resolve, reject) => {
-      const tx = this.db.transaction(['notes'], 'readonly');
-      const store = tx.objectStore('notes');
-      const req = store.getAll();
-      req.onsuccess = () => {
-        let items = req.result || [];
-        if (studentId) items = items.filter(n => n.studentId === studentId);
-        // Sort descending by createdAt
-        items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        resolve(items);
-      };
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  async getNotesForResource(resourceId) {
-    return new Promise((resolve, reject) => {
-      const tx = this.db.transaction(['notes'], 'readonly');
-      const store = tx.objectStore('notes');
-      const req = store.getAll();
-      req.onsuccess = () => {
-        const items = (req.result || []).filter(n => n.resourceId === resourceId);
-        items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        resolve(items);
-      };
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  async deleteNote(noteId) {
-    return new Promise((resolve, reject) => {
-      const tx = this.db.transaction(['notes'], 'readwrite');
-      const store = tx.objectStore('notes');
-      const req = store.delete(Number(noteId) || noteId);
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => reject(req.error);
-    });
   }
 
   // --- Sync Manifest Generator ---

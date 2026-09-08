@@ -1,4 +1,4 @@
-// EduSync Main Application Controller (v3)
+// EduSync Main Application Controller
 class EduSyncApp {
   constructor() {
     this.currentRole = null; // 'teacher' | 'student'
@@ -8,23 +8,15 @@ class EduSyncApp {
     this.currentQuiz = null;
     this.quizAnswers = {};
     this.currentQuizQuestionIdx = 0;
-    this.quizTimerInterval = null;
-    this.quizSecondsRemaining = 0;
-    this.activeLessonResourceId = null;
     this.currentTransferResource = null;
     this.discoveredPeers = [];
     this.radarSearchQuery = '';
-    this.theme = localStorage.getItem('edusync_theme') || 'dark';
-    this.quizBuilderQuestions = [];
   }
 
   async init() {
-    console.log('[EduSync] Initializing offline platform (v3)...');
+    console.log('[EduSync] Initializing offline platform...');
 
-    // 1. Initialize Theme
-    this.initTheme();
-
-    // 2. Immediately bind UI events
+    // 1. Immediately bind UI events and render home screen without blocking
     this.bindEvents();
     if (window.eduTransport) {
       this.bindTransportEvents();
@@ -35,7 +27,7 @@ class EduSyncApp {
     }
     this.renderScreen('screen-role-select');
 
-    // 3. Initialize offline IndexedDB
+    // 2. Initialize offline IndexedDB in non-blocking try-catch
     try {
       if (window.eduDB) {
         await window.eduDB.init();
@@ -45,7 +37,7 @@ class EduSyncApp {
       console.warn('[EduSync] Offline DB init issue:', err);
     }
     
-    // 4. Register Service Worker if supported
+    // 3. Register Service Worker if supported
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js')
         .then(() => console.log('[EduSync] Service worker active'))
@@ -53,81 +45,14 @@ class EduSyncApp {
     }
   }
 
-  // --- Theme Management ---
-  initTheme() {
-    document.documentElement.setAttribute('data-theme', this.theme);
-    this.updateThemeButtonsUI();
-  }
-
-  setTheme(theme) {
-    this.theme = theme;
-    localStorage.setItem('edusync_theme', theme);
-    document.documentElement.setAttribute('data-theme', theme);
-    this.updateThemeButtonsUI();
-  }
-
-  updateThemeButtonsUI() {
-    const darkBtn = document.getElementById('btn-theme-dark');
-    const lightBtn = document.getElementById('btn-theme-light');
-    if (darkBtn && lightBtn) {
-      if (this.theme === 'dark') {
-        darkBtn.classList.add('active');
-        lightBtn.classList.remove('active');
-      } else {
-        lightBtn.classList.add('active');
-        darkBtn.classList.remove('active');
-      }
-    }
-  }
-
-  // --- Drawer Navigation ---
-  openDrawer() {
-    this.updateDrawerUI();
-    document.getElementById('drawer-overlay')?.classList.add('active');
-  }
-
-  closeDrawer() {
-    document.getElementById('drawer-overlay')?.classList.remove('active');
-  }
-
-  updateDrawerUI() {
-    const roleText = document.getElementById('drawer-role-text');
-    const roleIcon = document.getElementById('drawer-role-icon');
-    const langText = document.getElementById('drawer-current-lang-text');
-    const notesSection = document.getElementById('drawer-notes-section');
-
-    if (roleText && roleIcon) {
-      if (this.currentRole === 'teacher') {
-        roleText.textContent = window.i18n.t('teacher');
-        roleIcon.textContent = '👨‍🏫';
-      } else if (this.currentRole === 'student') {
-        roleText.textContent = window.i18n.t('student');
-        roleIcon.textContent = '👨‍🎓';
-      } else {
-        roleText.textContent = window.i18n.t('selectRole');
-        roleIcon.textContent = '👤';
-      }
-    }
-
-    if (langText) {
-      langText.textContent = window.i18n.currentLang === 'hi' ? 'हिंदी (Hindi)' : 'English';
-    }
-
-    if (notesSection) {
-      notesSection.style.display = this.currentRole === 'student' ? 'block' : 'none';
-    }
-
-    this.updateThemeButtonsUI();
-  }
-
   updateTransportBadge() {
     const badge = document.getElementById('transport-badge');
     if (!badge) return;
     if (window.eduTransport && window.eduTransport.isNative) {
-      badge.textContent = 'Bluetooth Active';
+      badge.textContent = '📱 BLUETOOTH P2P — Real Hardware Active';
       badge.className = 'transport-badge badge-ble';
     } else {
-      badge.textContent = 'Offline Preview';
+      badge.textContent = '🧪 DEMO MODE — Single Device Simulated';
       badge.className = 'transport-badge badge-demo';
     }
   }
@@ -148,7 +73,10 @@ class EduSyncApp {
       } else if (this.currentRole === 'teacher') {
         const codeDisplay = document.getElementById('teacher-pairing-code-display');
         if (codeDisplay) {
-          codeDisplay.innerHTML = `<span style="font-size:1.1rem; color:var(--primary); font-weight:700;">✓ ${peer.name || 'Student'} Connected</span>`;
+          const count = window.eduTransport.getConnectedPeers().length;
+          const code = window.eduTransport.myDeviceInfo?.pairingCode || codeDisplay.dataset.pairingCode || '----';
+          codeDisplay.dataset.pairingCode = code;
+          codeDisplay.innerHTML = `${code}<div style="font-family:inherit; font-size:0.75rem; color:#34d399; letter-spacing:normal; margin-top:4px;">✓ ${count} Student${count === 1 ? '' : 's'} Connected</div>`;
         }
       }
     });
@@ -197,10 +125,10 @@ class EduSyncApp {
   onResourceReceived(resource) {
     console.log('[App] onResourceReceived triggered for:', resource.title);
 
-    // 1. Display prominent toast notification
+    // 1. Display prominent top toast notification
     this.showResourceReceivedToast(resource);
 
-    // 2. Alert notification for user awareness
+    // 2. Alert notification for guaranteed user awareness
     alert(`📥 New Lesson Received from Teacher!\n\n"${resource.title}" (${resource.chapter})\nSaved for offline study.`);
 
     // 3. Refresh active student screens immediately
@@ -219,29 +147,30 @@ class EduSyncApp {
     toast.id = 'toast-resource-received';
     toast.style.cssText = `
       position: fixed;
-      top: 68px;
-      left: 14px;
-      right: 14px;
-      max-width: 452px;
+      top: 75px;
+      left: 16px;
+      right: 16px;
+      max-width: 448px;
       margin: 0 auto;
-      background: var(--bg-surface-elevated);
-      border: 1px solid var(--primary);
-      box-shadow: var(--shadow-card);
-      border-radius: var(--radius-md);
-      padding: 12px 14px;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      border: 2px solid #00d2ff;
+      box-shadow: 0 8px 32px rgba(0, 210, 255, 0.5);
+      border-radius: 14px;
+      padding: 14px 16px;
       display: flex;
       align-items: center;
       gap: 12px;
       z-index: 99999;
+      animation: slideUp 0.3s ease;
     `;
     toast.innerHTML = `
-      <div style="font-size: 1.6rem;">📥</div>
+      <div style="font-size: 2rem;">📥</div>
       <div style="flex: 1; min-width: 0;">
-        <div style="font-size: 0.72rem; color: var(--primary); font-weight: 700; text-transform: uppercase;">New Resource Received!</div>
-        <div style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${resource.title}</div>
-        <div style="font-size: 0.72rem; color: var(--text-secondary);">${resource.chapter} • Saved for Offline Study</div>
+        <div style="font-size: 0.75rem; color: #00d2ff; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">New Resource Received!</div>
+        <div style="font-size: 0.95rem; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${resource.title}</div>
+        <div style="font-size: 0.75rem; color: #94a3b8;">${resource.chapter} • Saved for Offline Study</div>
       </div>
-      <button class="btn-primary btn-sm" style="width: auto;" onclick="document.getElementById('toast-resource-received').remove(); window.eduApp.openLessonViewer('${resource.resourceId}');">
+      <button class="btn-primary btn-sm" style="font-size: 0.8rem; padding: 8px 12px; width: auto;" onclick="document.getElementById('toast-resource-received').remove(); window.eduApp.openLessonViewer('${resource.resourceId}');">
         Open
       </button>
     `;
@@ -249,57 +178,39 @@ class EduSyncApp {
     root.appendChild(toast);
     setTimeout(() => {
       if (toast && toast.parentNode) toast.remove();
-    }, 9000);
+    }, 10000);
   }
 
   bindEvents() {
-    // Header & Drawer events
-    document.getElementById('btn-open-drawer')?.addEventListener('click', () => this.openDrawer());
-    document.getElementById('btn-close-drawer')?.addEventListener('click', () => this.closeDrawer());
-    document.getElementById('drawer-overlay')?.addEventListener('click', (e) => {
-      if (e.target.id === 'drawer-overlay') this.closeDrawer();
-    });
+    // Role selection - robust multi-listener binding
+    const teacherBtn = document.getElementById('btn-select-teacher');
+    if (teacherBtn) {
+      teacherBtn.onclick = (e) => {
+        e.preventDefault();
+        this.setRole('teacher');
+      };
+      teacherBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.setRole('teacher');
+      });
+    }
 
-    document.getElementById('btn-header-home')?.addEventListener('click', () => {
-      if (this.currentRole === 'teacher') {
-        this.renderTeacherDashboard();
-      } else if (this.currentRole === 'student') {
-        this.renderStudentDashboard();
-      } else {
-        this.renderScreen('screen-role-select');
-      }
-    });
+    const studentBtn = document.getElementById('btn-select-student');
+    if (studentBtn) {
+      studentBtn.onclick = (e) => {
+        e.preventDefault();
+        this.setRole('student');
+      };
+      studentBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.setRole('student');
+      });
+    }
 
-    document.getElementById('btn-drawer-switch-role')?.addEventListener('click', () => {
-      this.closeDrawer();
-      if (window.eduTransport) window.eduTransport.disconnect();
-      this.currentRole = null;
-      this.renderScreen('screen-role-select');
-    });
-
-    document.getElementById('btn-theme-dark')?.addEventListener('click', () => this.setTheme('dark'));
-    document.getElementById('btn-theme-light')?.addEventListener('click', () => this.setTheme('light'));
-
-    document.getElementById('btn-drawer-lang-toggle')?.addEventListener('click', () => {
+    // Language toggle
+    document.getElementById('btn-lang-toggle')?.addEventListener('click', () => {
       window.i18n.toggleLanguage();
-      this.updateDrawerUI();
       this.refreshCurrentScreen();
-    });
-
-    document.getElementById('btn-drawer-open-notes')?.addEventListener('click', () => {
-      this.closeDrawer();
-      this.renderStudentNotes();
-    });
-
-    // Role selection
-    document.getElementById('btn-select-teacher')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      this.setRole('teacher');
-    });
-
-    document.getElementById('btn-select-student')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      this.setRole('student');
     });
 
     // Class selection changes
@@ -325,46 +236,56 @@ class EduSyncApp {
       });
     });
 
-    // Teacher Dashboard navigation
+    // Navigation buttons
     document.getElementById('nav-teacher-resources')?.addEventListener('click', () => this.renderTeacherResources());
     document.getElementById('nav-teacher-nearby')?.addEventListener('click', () => this.renderNearbyRadar());
     document.getElementById('nav-teacher-progress')?.addEventListener('click', () => this.renderTeacherAnalytics());
     document.getElementById('nav-teacher-sync')?.addEventListener('click', () => this.openSyncCenter());
 
-    // Student Dashboard navigation
     document.getElementById('nav-student-learning')?.addEventListener('click', () => this.renderStudentLearning());
     document.getElementById('nav-student-quizzes')?.addEventListener('click', () => this.renderStudentQuizzes());
     document.getElementById('nav-student-progress')?.addEventListener('click', () => this.renderStudentScorecard());
-    document.getElementById('nav-student-notes')?.addEventListener('click', () => this.renderStudentNotes());
+    document.getElementById('nav-student-sync')?.addEventListener('click', () => {
+      if (!window.eduTransport.isConnected) {
+        this.renderNearbyRadar();
+      } else {
+        this.openSyncCenter();
+      }
+    });
+
+    // Back to role selector
+    document.querySelectorAll('.btn-back-home').forEach(btn => {
+      btn.addEventListener('click', () => {
+        window.eduTransport.disconnect();
+        this.renderScreen('screen-role-select');
+      });
+    });
 
     // Add Resource Modal
     const openAddModal = () => {
-      const isConnected = window.eduTransport.isConnected && window.eduTransport.connectedPeer;
+      const connectedPeers = window.eduTransport.getConnectedPeers();
+      const isConnected = connectedPeers.length > 0;
       const indicator = document.getElementById('add-res-bt-indicator');
       const submitBtn = document.getElementById('btn-save-and-share');
       if (indicator) {
         if (isConnected) {
-          indicator.innerHTML = `Connected: <b style="color:var(--primary);">${window.eduTransport.connectedPeer.name || 'Student Phone'}</b>`;
-          if (submitBtn) submitBtn.textContent = 'Save & Share via BT';
+          const label = connectedPeers.length === 1
+            ? (connectedPeers[0].name || 'Student Phone')
+            : `${connectedPeers.length} student devices`;
+          indicator.innerHTML = `🟢 Connected: <b style="color:var(--primary);">${label}</b>`;
+          if (submitBtn) submitBtn.textContent = '💾 Save & Share via BT';
         } else {
-          indicator.innerHTML = `Bluetooth: <b>No Student Connected</b>`;
-          if (submitBtn) submitBtn.textContent = 'Save Resource';
+          indicator.innerHTML = `⚪ Bluetooth: <b>No Student Connected</b>`;
+          if (submitBtn) submitBtn.textContent = '💾 Save Resource';
         }
       }
       document.getElementById('modal-add-resource').classList.add('active');
     };
-
     document.getElementById('btn-open-add-resource')?.addEventListener('click', openAddModal);
     document.getElementById('btn-open-add-resource-2')?.addEventListener('click', openAddModal);
+
     document.getElementById('btn-close-add-modal')?.addEventListener('click', () => {
       document.getElementById('modal-add-resource').classList.remove('active');
-    });
-
-    // Resource Type selector (show PDF upload when PDF is selected)
-    document.getElementById('res-input-type')?.addEventListener('change', (e) => {
-      const isPdf = e.target.value === 'pdf';
-      const pdfGroup = document.getElementById('group-pdf-file');
-      if (pdfGroup) pdfGroup.style.display = isPdf ? 'flex' : 'none';
     });
 
     document.getElementById('form-add-resource')?.addEventListener('submit', (e) => {
@@ -372,45 +293,9 @@ class EduSyncApp {
       this.handleAddNewResource();
     });
 
-    // Teacher Create Quiz Modal
-    document.getElementById('btn-open-create-quiz')?.addEventListener('click', () => this.openCreateQuizModal());
-    document.getElementById('btn-open-create-quiz-2')?.addEventListener('click', () => this.openCreateQuizModal());
-    document.getElementById('btn-close-create-quiz')?.addEventListener('click', () => {
-      document.getElementById('modal-create-quiz').classList.remove('active');
-    });
-    document.getElementById('btn-add-question-item')?.addEventListener('click', () => {
-      this.addQuizQuestionBuilderItem();
-    });
-    document.getElementById('form-create-quiz')?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.handleCreateQuizSubmit();
-    });
-
-    // Student Notes Modal
-    document.getElementById('btn-open-add-note')?.addEventListener('click', () => {
-      this.openAddNoteModal();
-    });
-    document.getElementById('btn-close-add-note')?.addEventListener('click', () => {
-      document.getElementById('modal-add-note').classList.remove('active');
-    });
-    document.getElementById('form-add-note')?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.handleSaveNote();
-    });
-
-    // Lesson Viewer Modal Close & Add Note shortcut
+    // Lesson Viewer Modal Close
     document.getElementById('btn-close-viewer')?.addEventListener('click', () => {
       document.getElementById('modal-lesson-viewer').classList.remove('active');
-    });
-    document.getElementById('btn-viewer-add-note')?.addEventListener('click', () => {
-      if (this.activeLessonResourceId) {
-        window.eduDB.getResource(this.activeLessonResourceId).then(res => {
-          document.getElementById('modal-lesson-viewer').classList.remove('active');
-          this.openAddNoteModal(res ? `Note on ${res.title}` : '', res ? res.chapter : '', this.activeLessonResourceId);
-        });
-      } else {
-        this.openAddNoteModal();
-      }
     });
 
     // Pairing Modal Listeners
@@ -438,21 +323,24 @@ class EduSyncApp {
   async setRole(role) {
     console.log(`[EduSync] User selected role: ${role}`);
     this.currentRole = role;
-    this.updateDrawerUI();
 
     if (role === 'teacher') {
+      // 1. Instantly switch to Teacher Dashboard so UI response is 0ms
       this.renderTeacherDashboard();
 
+      // 2. Set an initial pairing code display immediately
       const initialCode = Math.floor(1000 + Math.random() * 9000).toString();
       const codeEl = document.getElementById('teacher-pairing-code-display');
       if (codeEl) {
         codeEl.textContent = initialCode;
       }
 
+      // 3. Start Bluetooth Discovery in background without blocking screen transition
       try {
         if (window.eduTransport) {
-          const info = await window.eduTransport.startDiscovery('teacher', this.selectedClass, 'Teacher Sharma');
+          const info = await window.eduTransport.startDiscovery('teacher', this.selectedClass, 'Teacher Sharma (Govt High School)');
           if (codeEl && info?.pairingCode) {
+            codeEl.dataset.pairingCode = info.pairingCode;
             codeEl.textContent = info.pairingCode;
           }
         }
@@ -460,11 +348,13 @@ class EduSyncApp {
         console.warn('[EduSync] Start teacher discovery warning:', err);
       }
     } else {
+      // 1. Instantly switch to Student Dashboard
       this.renderStudentDashboard();
 
+      // 2. Start Bluetooth Discovery in background
       try {
         if (window.eduTransport) {
-          await window.eduTransport.startDiscovery('student', this.selectedClass, "Rahul's Phone");
+          await window.eduTransport.startDiscovery('student', this.selectedClass, "Rahul's Android Phone");
         }
       } catch (err) {
         console.warn('[EduSync] Start student discovery warning:', err);
@@ -495,8 +385,6 @@ class EduSyncApp {
       this.renderNearbyRadar();
     } else if (this.activeScreen === 'screen-sync-center') {
       this.openSyncCenter();
-    } else if (this.activeScreen === 'screen-student-notes') {
-      this.renderStudentNotes();
     }
     window.i18n.updateDOM();
   }
@@ -515,12 +403,15 @@ class EduSyncApp {
     container.innerHTML = '';
 
     if (resources.length === 0) {
-      container.innerHTML = `<div style="text-align:center; padding: 24px; color: var(--text-secondary);">No educational resources found for Class ${this.selectedClass}. Click <b>+ Resource</b> or <b>+ Quiz</b> to create one!</div>`;
+      container.innerHTML = `<div style="text-align:center; padding: 24px; color: var(--text-secondary);">No educational resources found for Class ${this.selectedClass}. Click <b>+ Add Resource</b> above to create one!</div>`;
       return;
     }
 
-    const isConnected = window.eduTransport.isConnected && window.eduTransport.connectedPeer;
-    const connectedPeerName = isConnected ? (window.eduTransport.connectedPeer.name ? window.eduTransport.connectedPeer.name.split(' ')[0] : 'Student') : null;
+    const connectedPeers = window.eduTransport.getConnectedPeers();
+    const isConnected = connectedPeers.length > 0;
+    const connectedPeerName = isConnected ? (connectedPeers.length === 1
+      ? (connectedPeers[0].name ? connectedPeers[0].name.split(' ')[0] : 'Student')
+      : `${connectedPeers.length} Students`) : null;
 
     resources.forEach((res) => {
       const card = document.createElement('div');
@@ -528,13 +419,13 @@ class EduSyncApp {
       const iconType = res.type === 'pdf' ? '📄' : res.type === 'notes' ? '📝' : res.type === 'quiz' ? '❓' : res.type === 'audio' ? '🎧' : '🎥';
       
       const shareBtnText = isConnected 
-        ? `Share (${connectedPeerName})` 
-        : 'Share via BT';
+        ? `📡 Share (${connectedPeerName})` 
+        : '📡 Share via BT';
 
       card.innerHTML = `
         <div class="resource-top">
           <div class="resource-header-info">
-            <div class="res-type-badge">${iconType}</div>
+            <div class="res-type-badge type-${res.type}">${iconType}</div>
             <div class="resource-meta">
               <h4>${res.title}</h4>
               <div class="resource-submeta">
@@ -546,15 +437,15 @@ class EduSyncApp {
           </div>
           <span class="badge-offline">✓ ${res.fileSize}</span>
         </div>
-        <div class="resource-actions" style="display: flex; gap: 6px; margin-top: 4px;">
+        <div class="resource-actions" style="display: flex; gap: 6px; margin-top: 8px;">
           <button class="btn-secondary btn-sm" style="flex: 1;" onclick="window.eduApp.openLessonViewer('${res.resourceId}')">
-            ${window.i18n.t('openResource')}
+            📖 ${window.i18n.t('openResource')}
           </button>
-          <button class="btn-primary btn-sm" style="flex: 1.3;" onclick="window.eduApp.shareResourceWithConnectedStudent('${res.resourceId}')">
+          <button class="btn-primary btn-sm" style="flex: 1.3; font-size: 0.78rem;" onclick="window.eduApp.shareResourceWithConnectedStudent('${res.resourceId}')">
             ${shareBtnText}
           </button>
-          <button class="btn-secondary btn-sm btn-danger" style="width: 36px; padding: 0;" onclick="window.eduApp.deleteResource('${res.resourceId}')" title="Delete Resource">
-            ✕
+          <button class="btn-secondary btn-sm" style="color: var(--accent-coral); width: 36px; padding: 0; justify-content: center;" onclick="window.eduApp.deleteResource('${res.resourceId}')" title="Delete Resource">
+            🗑️
           </button>
         </div>
       `;
@@ -563,7 +454,8 @@ class EduSyncApp {
   }
 
   async shareResourceWithConnectedStudent(resourceId) {
-    const isConnected = window.eduTransport.isConnected && window.eduTransport.connectedPeer;
+    const connectedPeers = window.eduTransport.getConnectedPeers();
+    const isConnected = connectedPeers.length > 0;
     const res = await window.eduDB.getResource(resourceId);
     if (!res) return;
 
@@ -573,11 +465,13 @@ class EduSyncApp {
       return;
     }
 
-    const studentName = window.eduTransport.connectedPeer.name || 'Student';
+    const studentName = connectedPeers.length === 1
+      ? (connectedPeers[0].name || 'Student')
+      : `${connectedPeers.length} connected students`;
     try {
       console.log(`[Teacher BT] Pushing resource "${res.title}" to ${studentName}...`);
       
-      // 1. Send direct atomic resource packet
+      // 1. Send direct atomic resource packet (fastest & most reliable)
       await window.eduTransport.sendPacketOverTransport({
         type: 'DIRECT_RESOURCE',
         resource: {
@@ -587,7 +481,7 @@ class EduSyncApp {
         }
       });
 
-      // 2. Stream chunked packets
+      // 2. Also stream chunked packets for visual progress bar sync
       await window.eduTransport.transferResourceChunks(res);
       
       // 3. Announce updated manifest
@@ -608,41 +502,19 @@ class EduSyncApp {
 
   async handleAddNewResource() {
     const title = document.getElementById('res-input-title').value.trim();
-    const subject = document.getElementById('res-input-subject').value.trim();
+    const subject = document.getElementById('res-input-subject').value;
     const chapter = document.getElementById('res-input-chapter').value.trim();
     const type = document.getElementById('res-input-type').value;
     const summary = document.getElementById('res-input-summary').value.trim();
     const pointsStr = document.getElementById('res-input-points').value.trim();
     const shareImmediately = document.getElementById('res-input-share-immediately')?.checked;
-    const fileInput = document.getElementById('res-input-file');
 
-    if (!title || !chapter || !subject) {
+    if (!title || !chapter) {
       alert('Please fill out all required fields.');
       return;
     }
 
     const keyPoints = pointsStr ? pointsStr.split('\n').filter(p => p.trim().length > 0) : ['Key concept explanation and examples.'];
-
-    // Read attached PDF file if selected
-    let pdfData = null;
-    let computedFileSize = (Math.random() * 1.5 + 1).toFixed(1) + ' MB';
-
-    if (type === 'pdf' && fileInput && fileInput.files && fileInput.files[0]) {
-      const file = fileInput.files[0];
-      computedFileSize = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
-      if (computedFileSize === '0.0 MB') computedFileSize = `${Math.round(file.size / 1024)} KB`;
-
-      try {
-        pdfData = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-      } catch (err) {
-        console.warn('Could not read PDF file:', err);
-      }
-    }
 
     const newRes = {
       resourceId: 'RES_' + Math.random().toString(36).substring(2, 9).toUpperCase(),
@@ -651,16 +523,15 @@ class EduSyncApp {
       subject: subject,
       chapter: chapter,
       type: type,
-      fileSize: computedFileSize,
+      fileSize: (Math.random() * 2 + 1).toFixed(1) + ' MB',
       version: 1,
       hash: 'hash_' + Math.random().toString(36).substring(2, 8),
       createdBy: 'Teacher',
       createdAt: new Date().toISOString(),
       isAvailableOffline: true,
       content: {
-        summary: summary || 'Educational lesson notes prepared for offline study.',
+        summary: summary || 'Comprehensive rural educational notes prepared for offline study.',
         keyPoints: keyPoints,
-        pdfData: pdfData,
         sampleProblem: 'Review the chapter summary and test your knowledge in the offline quiz section.'
       }
     };
@@ -668,24 +539,27 @@ class EduSyncApp {
     await window.eduDB.addResource(newRes);
     document.getElementById('modal-add-resource').classList.remove('active');
     document.getElementById('form-add-resource').reset();
-    const pdfGroup = document.getElementById('group-pdf-file');
-    if (pdfGroup) pdfGroup.style.display = 'none';
-
     this.renderTeacherResources();
 
-    const isConnected = window.eduTransport.isConnected && window.eduTransport.connectedPeer;
+    const connectedPeers = window.eduTransport.getConnectedPeers();
+    const isConnected = connectedPeers.length > 0;
     if (shareImmediately && isConnected) {
-      const studentName = window.eduTransport.connectedPeer.name || 'Connected Student';
+      const studentName = connectedPeers.length === 1
+        ? (connectedPeers[0].name || 'Connected Student')
+        : `${connectedPeers.length} connected students`;
       try {
         console.log(`[Teacher BT] Auto-sharing new resource "${newRes.title}" with ${studentName}...`);
         
+        // 1. Direct atomic packet transfer
         await window.eduTransport.sendPacketOverTransport({
           type: 'DIRECT_RESOURCE',
           resource: newRes
         });
 
+        // 2. Stream chunked packets
         await window.eduTransport.transferResourceChunks(newRes);
         
+        // 3. Broadcast updated manifest
         const manifest = await window.eduDB.generateManifest(false);
         await window.eduTransport.sendPacketOverTransport({
           type: 'MANIFEST_ANNOUNCE',
@@ -711,125 +585,6 @@ class EduSyncApp {
     }
   }
 
-  // --- Teacher Quiz Creator ---
-  openCreateQuizModal() {
-    this.quizBuilderQuestions = [];
-    document.getElementById('form-create-quiz').reset();
-    document.getElementById('quiz-input-class').value = this.selectedClass;
-    document.getElementById('quiz-input-timelimit').value = 10;
-    
-    // Add 2 initial question items
-    this.addQuizQuestionBuilderItem();
-    this.addQuizQuestionBuilderItem();
-
-    document.getElementById('modal-create-quiz').classList.add('active');
-  }
-
-  addQuizQuestionBuilderItem() {
-    const qIdx = this.quizBuilderQuestions.length + 1;
-    const container = document.getElementById('quiz-questions-builder-list');
-    if (!container) return;
-
-    const qItem = document.createElement('div');
-    qItem.className = 'question-builder-item';
-    qItem.id = `builder-q-${qIdx}`;
-    qItem.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-weight:700; font-size:0.82rem; color:var(--primary);">Question ${qIdx}</span>
-        ${qIdx > 1 ? `<button type="button" class="btn-secondary btn-sm btn-danger" onclick="this.closest('.question-builder-item').remove()">Remove</button>` : ''}
-      </div>
-      <input type="text" class="form-control q-text-input" placeholder="Enter question text..." required>
-      
-      <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:2px;">Options (Select radio for correct answer):</div>
-      <div class="option-radio-group">
-        <div class="option-input-row">
-          <input type="radio" name="correct_${qIdx}" value="0" checked>
-          <input type="text" class="form-control q-opt-0" placeholder="Option A" required>
-        </div>
-        <div class="option-input-row">
-          <input type="radio" name="correct_${qIdx}" value="1">
-          <input type="text" class="form-control q-opt-1" placeholder="Option B" required>
-        </div>
-        <div class="option-input-row">
-          <input type="radio" name="correct_${qIdx}" value="2">
-          <input type="text" class="form-control q-opt-2" placeholder="Option C" required>
-        </div>
-        <div class="option-input-row">
-          <input type="radio" name="correct_${qIdx}" value="3">
-          <input type="text" class="form-control q-opt-3" placeholder="Option D" required>
-        </div>
-      </div>
-
-      <input type="text" class="form-control q-exp-input" placeholder="Explanation / Hint (Optional)">
-    `;
-
-    container.appendChild(qItem);
-    this.quizBuilderQuestions.push(qIdx);
-  }
-
-  async handleCreateQuizSubmit() {
-    const title = document.getElementById('quiz-input-title').value.trim();
-    const subject = document.getElementById('quiz-input-subject').value.trim();
-    const cls = document.getElementById('quiz-input-class').value;
-    const chapter = document.getElementById('quiz-input-chapter').value.trim();
-    const timeLimit = parseInt(document.getElementById('quiz-input-timelimit').value, 10) || 10;
-
-    const questionBlocks = document.querySelectorAll('#quiz-questions-builder-list .question-builder-item');
-    if (questionBlocks.length === 0) {
-      alert('Please add at least one question to the quiz.');
-      return;
-    }
-
-    const questions = [];
-    questionBlocks.forEach((block, idx) => {
-      const qText = block.querySelector('.q-text-input')?.value.trim();
-      const opt0 = block.querySelector('.q-opt-0')?.value.trim();
-      const opt1 = block.querySelector('.q-opt-1')?.value.trim();
-      const opt2 = block.querySelector('.q-opt-2')?.value.trim();
-      const opt3 = block.querySelector('.q-opt-3')?.value.trim();
-      const explanation = block.querySelector('.q-exp-input')?.value.trim();
-      
-      const correctRadio = block.querySelector('input[type="radio"]:checked');
-      const correctIdx = correctRadio ? parseInt(correctRadio.value, 10) : 0;
-
-      if (qText && opt0 && opt1) {
-        questions.push({
-          id: `q_${idx + 1}`,
-          question: qText,
-          options: [opt0, opt1, opt2 || 'N/A', opt3 || 'None of the above'],
-          correctAnswer: correctIdx,
-          explanation: explanation || 'Correct answer verified.'
-        });
-      }
-    });
-
-    if (questions.length === 0) {
-      alert('Please enter valid question and option details.');
-      return;
-    }
-
-    const newQuiz = {
-      quizId: 'QUIZ_' + Math.random().toString(36).substring(2, 9).toUpperCase(),
-      title: title,
-      class: cls,
-      subject: subject,
-      chapter: chapter,
-      timeLimitMinutes: timeLimit,
-      totalQuestions: questions.length,
-      questions: questions,
-      createdBy: 'Teacher',
-      createdAt: new Date().toISOString()
-    };
-
-    await window.eduDB.addQuiz(newQuiz);
-    document.getElementById('modal-create-quiz').classList.remove('active');
-    alert(`✅ Quiz "${newQuiz.title}" created successfully with ${newQuiz.timeLimitMinutes} min timer!`);
-    
-    if (this.activeScreen === 'screen-student-quizzes') {
-      this.renderStudentQuizzes();
-    }
-  }
-
   // --- Student Views ---
   renderStudentDashboard() {
     this.renderScreen('screen-student-dashboard');
@@ -844,12 +599,13 @@ class EduSyncApp {
     const localMap = new Map();
     localResources.forEach(r => localMap.set(r.resourceId, r));
 
+    // Combine local resources with any new items announced by the connected teacher
     let combinedResources = [...localResources];
     if (window.eduSyncEngine && window.eduSyncEngine.latestTeacherManifest) {
       window.eduSyncEngine.latestTeacherManifest.forEach(tm => {
         if (!localMap.has(tm.resourceId)) {
           if ((!this.selectedClass || tm.class === this.selectedClass.toString()) &&
-              (!this.selectedSubject || this.selectedSubject === 'all' || tm.subject.toLowerCase() === this.selectedSubject.toLowerCase())) {
+              (!this.selectedSubject || this.selectedSubject === 'all' || tm.subject === this.selectedSubject)) {
             combinedResources.push({
               ...tm,
               isAvailableOffline: false
@@ -862,7 +618,7 @@ class EduSyncApp {
     container.innerHTML = '';
 
     if (combinedResources.length === 0) {
-      container.innerHTML = `<div style="text-align:center; padding: 24px; color: var(--text-secondary);">No educational lessons found for Class ${this.selectedClass}. Connect with your Teacher over Bluetooth to sync lessons!</div>`;
+      container.innerHTML = `<div style="text-align:center; padding: 24px; color: var(--text-secondary);">No educational lessons found. Connect with your Teacher over Bluetooth to sync lessons!</div>`;
       return;
     }
 
@@ -874,16 +630,16 @@ class EduSyncApp {
       const isOffline = res.isAvailableOffline;
       const statusBadge = isOffline 
         ? `<span class="badge-offline">✓ ${window.i18n.t('availableOffline')}</span>` 
-        : `<span class="badge-missing">⚠️ On Teacher Phone</span>`;
+        : `<span class="badge-missing">⚠️ Available on Teacher Phone</span>`;
 
       const actionBtn = isOffline
-        ? `<button class="btn-primary btn-sm" style="flex:1;" onclick="window.eduApp.openLessonViewer('${res.resourceId}')">${window.i18n.t('openResource')}</button>`
-        : `<button class="btn-secondary btn-sm" style="flex:1; border-color:var(--primary); color:var(--primary);" onclick="window.eduApp.openSyncCenter()">Sync from Teacher</button>`;
+        ? `<button class="btn-primary btn-sm" style="flex:1;" onclick="window.eduApp.openLessonViewer('${res.resourceId}')">📖 ${window.i18n.t('openResource')}</button>`
+        : `<button class="btn-secondary btn-sm" style="flex:1; border-color:var(--primary); color:var(--primary);" onclick="window.eduApp.openSyncCenter()">🔄 Sync from Teacher</button>`;
 
       card.innerHTML = `
         <div class="resource-top">
           <div class="resource-header-info">
-            <div class="res-type-badge">${iconType}</div>
+            <div class="res-type-badge type-${res.type}">${iconType}</div>
             <div class="resource-meta">
               <h4>${res.title}</h4>
               <div class="resource-submeta">
@@ -895,7 +651,7 @@ class EduSyncApp {
           </div>
           ${statusBadge}
         </div>
-        <div class="resource-actions" style="display:flex; gap:6px; margin-top:4px;">
+        <div class="resource-actions" style="display:flex; gap:6px; margin-top:8px;">
           ${actionBtn}
         </div>
       `;
@@ -903,7 +659,7 @@ class EduSyncApp {
     });
   }
 
-  // --- Offline Quiz System (Timed) ---
+  // --- Offline Quiz System ---
   async renderStudentQuizzes() {
     this.renderScreen('screen-student-quizzes');
     const container = document.getElementById('student-quiz-list');
@@ -912,27 +668,19 @@ class EduSyncApp {
     const quizzes = await window.eduDB.getAllQuizzes(this.selectedClass);
     container.innerHTML = '';
 
-    if (quizzes.length === 0) {
-      container.innerHTML = `<div style="text-align:center; padding: 24px; color: var(--text-secondary);">No quizzes available for Class ${this.selectedClass}.</div>`;
-      return;
-    }
-
     quizzes.forEach((q) => {
       const card = document.createElement('div');
       card.className = 'resource-card';
-      const timeLabel = q.timeLimitMinutes ? `${q.timeLimitMinutes} min` : '10 min';
-      
       card.innerHTML = `
         <div class="resource-top">
           <div class="resource-header-info">
-            <div class="res-type-badge">❓</div>
+            <div class="res-type-badge type-quiz">❓</div>
             <div class="resource-meta">
               <h4>${q.title}</h4>
               <div class="resource-submeta">
                 <span style="text-transform: capitalize;">${q.subject}</span> &bull; 
                 <span>${q.chapter}</span> &bull; 
-                <span>${q.totalQuestions || q.questions?.length} Questions</span> &bull;
-                <span>⏱ ${timeLabel}</span>
+                <span>${q.totalQuestions} Questions</span>
               </div>
             </div>
           </div>
@@ -940,7 +688,7 @@ class EduSyncApp {
         </div>
         <div class="resource-actions">
           <button class="btn-primary btn-sm" onclick="window.eduApp.startQuiz('${q.quizId}')">
-            ${window.i18n.t('startQuiz')}
+            ✍️ ${window.i18n.t('startQuiz')}
           </button>
         </div>
       `;
@@ -955,52 +703,8 @@ class EduSyncApp {
     this.currentQuiz = quiz;
     this.quizAnswers = {};
     this.currentQuizQuestionIdx = 0;
-
-    // Start Timer
-    const limitMinutes = quiz.timeLimitMinutes || 10;
-    this.quizSecondsRemaining = limitMinutes * 60;
-    this.startQuizTimer();
-
     this.renderScreen('screen-quiz-taker');
     this.renderQuizQuestion();
-  }
-
-  startQuizTimer() {
-    if (this.quizTimerInterval) clearInterval(this.quizTimerInterval);
-
-    const updateTimerDisplay = () => {
-      const display = document.getElementById('quiz-timer-display');
-      if (!display) return;
-
-      const mins = Math.floor(this.quizSecondsRemaining / 60);
-      const secs = this.quizSecondsRemaining % 60;
-      display.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-
-      if (this.quizSecondsRemaining <= 60) {
-        display.classList.add('timer-warning');
-      } else {
-        display.classList.remove('timer-warning');
-      }
-
-      if (this.quizSecondsRemaining <= 0) {
-        clearInterval(this.quizTimerInterval);
-        alert(`⏱ ${window.i18n.t('timesUp')}\n\n${window.i18n.t('timesUpMsg')}`);
-        this.submitQuiz();
-      } else {
-        this.quizSecondsRemaining--;
-      }
-    };
-
-    updateTimerDisplay();
-    this.quizTimerInterval = setInterval(updateTimerDisplay, 1000);
-  }
-
-  cancelQuiz() {
-    if (this.quizTimerInterval) {
-      clearInterval(this.quizTimerInterval);
-      this.quizTimerInterval = null;
-    }
-    this.renderStudentQuizzes();
   }
 
   renderQuizQuestion() {
@@ -1052,11 +756,6 @@ class EduSyncApp {
   }
 
   async submitQuiz() {
-    if (this.quizTimerInterval) {
-      clearInterval(this.quizTimerInterval);
-      this.quizTimerInterval = null;
-    }
-
     const quiz = this.currentQuiz;
     let score = 0;
     quiz.questions.forEach((q) => {
@@ -1113,7 +812,7 @@ class EduSyncApp {
       card.innerHTML = `
         <div class="resource-top">
           <div class="resource-header-info">
-            <div class="res-type-badge">📊</div>
+            <div class="res-type-badge type-quiz">📊</div>
             <div class="resource-meta">
               <h4>${sub.quizTitle}</h4>
               <div class="resource-submeta">
@@ -1129,89 +828,6 @@ class EduSyncApp {
     });
   }
 
-  // --- Student Study Notes & Doubts ---
-  async renderStudentNotes() {
-    this.renderScreen('screen-student-notes');
-    const container = document.getElementById('student-notes-list');
-    if (!container) return;
-
-    const notes = await window.eduDB.getAllNotes();
-    container.innerHTML = '';
-
-    if (notes.length === 0) {
-      container.innerHTML = `
-        <div style="text-align:center; padding:30px 16px; color:var(--text-secondary); background:var(--bg-card); border-radius:var(--radius-md); border:1px dashed var(--border-subtle);">
-          <div style="font-size:2rem; margin-bottom:6px;">📝</div>
-          <div style="font-weight:600; color:var(--text-main); margin-bottom:4px;">No Notes or Doubts Yet</div>
-          <div>Jot down doubts, formulas, or reminders while studying offline.</div>
-          <button class="btn-primary btn-sm" style="margin-top:12px; width:auto;" onclick="window.eduApp.openAddNoteModal()">+ Add First Note</button>
-        </div>
-      `;
-      return;
-    }
-
-    notes.forEach((note) => {
-      const item = document.createElement('div');
-      item.className = 'note-item-card';
-      item.innerHTML = `
-        <div class="note-item-header">
-          <div class="note-item-title">${note.title}</div>
-          <button class="btn-secondary btn-sm btn-danger" style="padding:2px 8px; font-size:0.75rem;" onclick="window.eduApp.deleteNote(${note.id})" title="Delete Note">✕</button>
-        </div>
-        ${note.topic ? `<div style="font-size:0.75rem; color:var(--primary); font-weight:600;">${note.topic}</div>` : ''}
-        <div class="note-item-body">${note.content}</div>
-        <div class="note-item-footer">
-          <span>${new Date(note.createdAt).toLocaleDateString()} ${new Date(note.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-          <span>Offline Private</span>
-        </div>
-      `;
-      container.appendChild(item);
-    });
-  }
-
-  openAddNoteModal(prefillTitle = '', prefillTopic = '', resourceId = '') {
-    document.getElementById('form-add-note').reset();
-    document.getElementById('note-input-title').value = prefillTitle;
-    document.getElementById('note-input-topic').value = prefillTopic;
-    document.getElementById('note-input-resource-id').value = resourceId;
-    document.getElementById('modal-add-note').classList.add('active');
-  }
-
-  async handleSaveNote() {
-    const title = document.getElementById('note-input-title').value.trim();
-    const topic = document.getElementById('note-input-topic').value.trim();
-    const content = document.getElementById('note-input-content').value.trim();
-    const resourceId = document.getElementById('note-input-resource-id').value;
-
-    if (!title || !content) {
-      alert('Please enter a note title and content.');
-      return;
-    }
-
-    await window.eduDB.addNote({
-      title: title,
-      topic: topic,
-      content: content,
-      resourceId: resourceId || null,
-      studentId: 'STU_RAHUL'
-    });
-
-    document.getElementById('modal-add-note').classList.remove('active');
-    
-    if (this.activeScreen === 'screen-student-notes') {
-      this.renderStudentNotes();
-    } else {
-      alert('✅ Note saved offline to your study notes!');
-    }
-  }
-
-  async deleteNote(noteId) {
-    if (confirm('Delete this note?')) {
-      await window.eduDB.deleteNote(noteId);
-      this.renderStudentNotes();
-    }
-  }
-
   // --- Teacher Analytics ---
   async renderTeacherAnalytics() {
     this.renderScreen('screen-teacher-analytics');
@@ -1221,6 +837,7 @@ class EduSyncApp {
     const submissions = await window.eduDB.getAllSubmissions();
     container.innerHTML = '';
 
+    // Update stats counters
     document.getElementById('stat-total-quizzes').textContent = submissions.length;
     
     let totalScore = 0;
@@ -1255,9 +872,10 @@ class EduSyncApp {
     const statusText = document.getElementById('radar-status-text');
     const rescanBtn = document.getElementById('btn-rescan-radar');
 
-    if (statusText) statusText.textContent = 'Searching for nearby Bluetooth devices...';
-    if (rescanBtn) rescanBtn.textContent = 'Rescanning...';
+    if (statusText) statusText.textContent = '🔍 Actively searching for nearby Bluetooth devices...';
+    if (rescanBtn) rescanBtn.textContent = '⏳ Rescanning...';
 
+    // Restart scanner
     this.renderNearbyRadar();
 
     if (window.eduTransport.isNative) {
@@ -1270,9 +888,9 @@ class EduSyncApp {
     }
 
     setTimeout(() => {
-      if (rescanBtn) rescanBtn.textContent = 'Rescan';
-      if (statusText) statusText.textContent = 'Bluetooth Scanner Active';
-    }, 3000);
+      if (rescanBtn) rescanBtn.textContent = '🔄 Rescan';
+      if (statusText) statusText.textContent = '📡 Bluetooth Scanner Active';
+    }, 3500);
   }
 
   filterNearbyPeers() {
@@ -1304,8 +922,9 @@ class EduSyncApp {
     }
 
     if (window.eduTransport.isNative) {
+      // Real Bluetooth Scanning
       window.eduTransport.startDiscovery(this.currentRole, this.selectedClass, 
-        this.currentRole === 'teacher' ? 'Teacher Sharma' : "Rahul's Phone");
+        this.currentRole === 'teacher' ? 'Teacher Sharma (Govt High School)' : "Rahul's Android Phone");
     }
   }
 
@@ -1322,26 +941,34 @@ class EduSyncApp {
       clearBtn.style.display = query ? 'block' : 'none';
     }
 
-    if (!window.eduTransport.isNative) {
-      // Single simulated preview peer option for browser testing
+    // Header active banner
+    if (window.eduTransport.isNative) {
+      const statusBanner = document.createElement('div');
+      statusBanner.style.cssText = 'background: rgba(0, 210, 255, 0.1); border: 1px solid rgba(0, 210, 255, 0.3); border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 0.8rem; color: var(--primary); text-align: center;';
+      statusBanner.innerHTML = '📡 <b>Bluetooth Scanner Active:</b> Searching for nearby EduSync devices...';
+      peerList.appendChild(statusBanner);
+    } else {
+      // Demo Mode for Browser Preview
       const demoBanner = document.createElement('div');
-      demoBanner.style.cssText = 'background: var(--bg-surface-elevated); border: 1px dashed var(--border-subtle); border-radius: 8px; padding: 10px; margin-bottom: 8px; font-size: 0.75rem; color: var(--text-secondary); text-align: center;';
+      demoBanner.style.cssText = 'background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; padding: 12px; margin-bottom: 12px; font-size: 0.8rem; color: #f59e0b; text-align: center; line-height: 1.4;';
       demoBanner.innerHTML = `
-        <div>Browser Simulation Mode</div>
-        <button class="btn-secondary btn-sm" id="btn-add-demo-peer" style="margin-top: 6px; font-size: 0.72rem; width: auto;">
-          + Add Local Test Peer
+        <div style="font-weight: 700; margin-bottom: 4px;">⚠️ DEMO MODE — Single Device Simulated</div>
+        <div>No Bluetooth hardware in browser. Full device-to-device Bluetooth sync operates when installed as an APK on Android.</div>
+        <button class="btn-secondary btn-sm" id="btn-add-demo-peer" style="margin-top: 8px; font-size: 0.75rem; width: auto;">
+          ➕ Add Labeled Test Peer (Local Preview Only)
         </button>
       `;
       peerList.appendChild(demoBanner);
 
       document.getElementById('btn-add-demo-peer')?.addEventListener('click', () => {
         const testPeer = this.currentRole === 'teacher' 
-          ? { id: 'sim_stu_1', name: "Rahul's Phone [Preview Peer]", role: 'student', class: '8', pairingCode: '4821', isSimulated: true }
-          : { id: 'sim_tch_1', name: "Science Teacher [Preview Peer]", role: 'teacher', class: '8', pairingCode: '4821', isSimulated: true };
+          ? { id: 'sim_stu_1', name: "Rahul's Phone [DEMO TEST PEER]", role: 'student', class: '8', pairingCode: '4821', isSimulated: true }
+          : { id: 'sim_tch_1', name: "Science Teacher [DEMO TEST PEER]", role: 'teacher', class: '8', pairingCode: '4821', isSimulated: true };
         this.addPeerToRadarList(testPeer);
       });
     }
 
+    // Filter peers
     let filtered = this.discoveredPeers;
     if (query) {
       filtered = this.discoveredPeers.filter(p => {
@@ -1355,7 +982,7 @@ class EduSyncApp {
 
       if (counter) {
         counter.style.display = 'block';
-        counter.textContent = `Showing ${filtered.length} of ${this.discoveredPeers.length} matching "${query}"`;
+        counter.textContent = `Showing ${filtered.length} of ${this.discoveredPeers.length} device(s) matching "${query}"`;
       }
     } else {
       if (counter) {
@@ -1364,14 +991,37 @@ class EduSyncApp {
       }
     }
 
+    // Empty search state
+    if (query && filtered.length === 0) {
+      const emptyDiv = document.createElement('div');
+      emptyDiv.style.cssText = 'background: rgba(255, 255, 255, 0.04); border: 1px dashed var(--border-subtle); border-radius: 8px; padding: 20px; text-align: center; color: var(--text-secondary); font-size: 0.85rem; margin-top: 8px;';
+      emptyDiv.innerHTML = `
+        <div style="font-size: 1.6rem; margin-bottom: 6px;">🔍</div>
+        <div style="font-weight: 600; color: var(--text-main); margin-bottom: 4px;">No nearby devices match your search</div>
+        <div>No device found matching "<b>${query.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</b>"</div>
+        <button class="btn-secondary btn-sm" style="margin-top: 12px; width: auto;" onclick="window.eduApp.clearRadarSearch()">
+          Clear Search Filter
+        </button>
+      `;
+      peerList.appendChild(emptyDiv);
+      return;
+    }
+
     filtered.forEach((peer) => {
+      const badgeHtml = peer.isSimulated 
+        ? '<span style="font-size:0.68rem; color:#f59e0b; font-weight:700;">[SIMULATED TEST PEER]</span>'
+        : peer.isPaired 
+          ? '<span style="font-size:0.68rem; color:#34d399; font-weight:700;">✓ [PAIRED PHONE]</span>'
+          : '<span style="font-size:0.68rem; color:#00d2ff; font-weight:700;">[BLUETOOTH DISCOVERED]</span>';
+
       const item = document.createElement('div');
       item.className = 'peer-card';
       item.style.cursor = 'pointer';
       item.innerHTML = `
         <div class="peer-info">
-          <h4>${peer.name}</h4>
-          <p>${peer.role === 'teacher' ? 'Teacher' : 'Student'} &bull; Class ${peer.class || '8'}</p>
+          <h4>📱 ${peer.name}</h4>
+          <p>${peer.role === 'teacher' ? 'Teacher' : 'Student'} &bull; ${peer.address ? `<span style="font-family:monospace; font-size:0.75rem;">${peer.address}</span>` : ''} ${peer.rssi ? `&bull; Signal: ${peer.rssi} dBm` : ''}</p>
+          ${badgeHtml}
         </div>
         <button class="btn-primary btn-sm" style="width:auto;">
           ${window.i18n.t('connect')}
@@ -1393,6 +1043,7 @@ class EduSyncApp {
 
   addPeerToRadarList(peer) {
     if (!this.discoveredPeers) this.discoveredPeers = [];
+    // Avoid duplicates
     if (this.discoveredPeers.some(p => (p.address || p.id) === (peer.address || peer.id))) {
       return;
     }
@@ -1450,9 +1101,9 @@ class EduSyncApp {
 
   goBackFromSyncCenter() {
     if (this.currentRole === 'student') {
-      this.renderStudentDashboard();
+      this.renderStudentLearning();
     } else {
-      this.renderTeacherDashboard();
+      this.setRole('teacher');
     }
   }
 
@@ -1466,6 +1117,7 @@ class EduSyncApp {
 
     const localManifest = await window.eduDB.generateManifest(this.currentRole === 'student');
     
+    // If student received teacher manifest over Bluetooth, use it
     const peerManifest = (this.currentRole === 'student' && window.eduSyncEngine.latestTeacherManifest)
       ? window.eduSyncEngine.latestTeacherManifest
       : await window.eduDB.generateManifest(false);
@@ -1480,34 +1132,38 @@ class EduSyncApp {
 
     if (this.currentRole === 'student' && !isConnected) {
       diffContainer.innerHTML = `
-        <div style="text-align: center; padding: 24px 16px; background: var(--bg-surface-elevated); border: 1px dashed var(--border-subtle); border-radius: 12px; margin-bottom: 16px;">
-          <div style="font-size: 2.5rem; margin-bottom: 8px;">📡</div>
+        <div style="text-align: center; padding: 24px 16px; background: rgba(0, 210, 255, 0.05); border: 1px dashed rgba(0, 210, 255, 0.3); border-radius: 12px; margin-bottom: 16px;">
+          <div style="font-size: 3rem; margin-bottom: 8px;">📡</div>
           <h3 style="color: var(--primary); margin-bottom: 6px;">No Teacher Connected</h3>
-          <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 14px;">
-            To download educational lessons and sync your quizzes, connect to your nearby Teacher via Bluetooth.
+          <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 16px;">
+            To download educational lessons and sync your quizzes, connect to your nearby Teacher's device via Bluetooth.
           </p>
           <button class="btn-primary" style="width: 100%;" onclick="window.eduApp.renderNearbyRadar()">
-            Scan for Nearby Teachers
+            🔍 Scan for Nearby Teachers
           </button>
         </div>
       `;
       syncActionContainer.innerHTML = `
         <div style="display: flex; gap: 8px; width: 100%;">
-          <button class="btn-secondary" style="flex: 1;" onclick="window.eduApp.renderStudentLearning()">Learning Library</button>
-          <button class="btn-secondary" style="flex: 1;" onclick="window.eduApp.renderStudentDashboard()">Dashboard</button>
+          <button class="btn-secondary" style="flex: 1;" onclick="window.eduApp.renderStudentLearning()">📖 Learning Centre</button>
+          <button class="btn-secondary" style="flex: 1;" onclick="window.eduApp.setRole('student')">🏠 Dashboard</button>
         </div>
       `;
       return;
     }
 
+    const transportLabel = window.eduTransport.isNative 
+      ? '📱 Bluetooth Direct P2P' 
+      : '🧪 DEMO MODE — Single Device Simulated';
+
     const transportBannerHtml = `
-      <div style="background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem;">
+      <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem;">
         <div>
           <div style="font-weight: 700; color: var(--text-main);">Connected Device:</div>
-          <div style="color: var(--primary);">${peerInfo ? peerInfo.name : 'Bluetooth Session'}</div>
+          <div style="color: var(--primary);">${peerInfo ? peerInfo.name : 'Bluetooth P2P Session'}</div>
         </div>
-        <span class="status-pill">
-          ${window.eduTransport.isNative ? 'Bluetooth P2P' : 'Offline Ready'}
+        <span class="status-pill" style="font-size:0.7rem; color:${window.eduTransport.isNative ? '#00d2ff' : '#f59e0b'};">
+          ${transportLabel}
         </span>
       </div>
     `;
@@ -1515,19 +1171,19 @@ class EduSyncApp {
     if (diff.missingOnLocal.length === 0) {
       diffContainer.innerHTML = transportBannerHtml + `
         <div style="text-align:center; padding: 20px;">
-          <div style="font-size: 2.2rem; margin-bottom: 6px;">✓</div>
-          <h3 style="color: var(--primary); font-size:1.05rem; margin-bottom: 4px;">${window.i18n.t('allUpToDate')}</h3>
-          <p style="font-size:0.8rem; color:var(--text-secondary);">${diff.upToDate.length} resources verified with latest hashes.</p>
+          <div style="font-size: 2.5rem; margin-bottom: 8px;">✨</div>
+          <h3 style="color: #34d399; font-size:1.1rem; margin-bottom: 4px;">${window.i18n.t('allUpToDate')}</h3>
+          <p style="font-size:0.82rem; color:var(--text-secondary);">${diff.upToDate.length} resources verified with latest hashes.</p>
         </div>
       `;
       syncActionContainer.innerHTML = `
-        <button class="btn-primary" style="width: 100%;" onclick="window.eduApp.renderStudentLearning()">Go to Learning Library</button>
-        <button class="btn-secondary" style="width: 100%;" onclick="window.eduApp.goBackFromSyncCenter()">Back</button>
+        <button class="btn-primary" style="width: 100%;" onclick="window.eduApp.renderStudentLearning()">📖 Go to Learning Centre</button>
+        <button class="btn-secondary" style="width: 100%;" onclick="window.eduApp.setRole(window.eduApp.currentRole || 'student')">🏠 Back to Dashboard</button>
       `;
     } else {
       let missingListHtml = diff.missingOnLocal.map(m => `
-        <div style="display:flex; justify-content:space-between; font-size:0.82rem; padding: 6px 0; border-bottom:1px solid var(--border-subtle);">
-          <span><b>${m.chapter}</b>: ${m.title}</span>
+        <div style="display:flex; justify-content:space-between; font-size:0.85rem; padding: 6px 0; border-bottom:1px solid rgba(255,255,255,0.06);">
+          <span>📚 <b>${m.chapter}</b>: ${m.title}</span>
           <span style="color:var(--primary); font-weight:600;">${m.fileSize}</span>
         </div>
       `).join('');
@@ -1540,10 +1196,10 @@ class EduSyncApp {
           </div>
           <div class="sync-stat-row">
             <span>Verified Up to Date:</span>
-            <span style="color:var(--primary);">${diff.upToDate.length} resources</span>
+            <span style="color:#34d399;">${diff.upToDate.length} resources</span>
           </div>
-          <div style="margin-top: 6px;">
-            <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:4px;">Missing Resources:</div>
+          <div style="margin-top: 8px;">
+            <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px;">Missing Resources to be Transferred:</div>
             ${missingListHtml}
           </div>
         </div>
@@ -1551,12 +1207,15 @@ class EduSyncApp {
 
       syncActionContainer.innerHTML = `
         <button class="btn-primary" id="btn-start-sync" onclick="window.eduApp.startSyncProcess(${JSON.stringify(diff.missingOnLocal).replace(/"/g, '&quot;')})">
-          ${window.i18n.t('syncNow')} (${diff.missingOnLocal.length})
+          🚀 ${window.i18n.t('syncNow')} (${diff.missingOnLocal.length})
         </button>
         <div style="display: flex; gap: 8px; width: 100%;">
-          <button class="btn-secondary" style="flex: 1;" onclick="window.eduApp.renderStudentLearning()">Learning Library</button>
-          <button class="btn-secondary" style="flex: 1;" onclick="window.eduApp.goBackFromSyncCenter()">Back</button>
+          <button class="btn-secondary" style="flex: 1;" onclick="window.eduApp.renderStudentLearning()">📖 Learning Centre</button>
+          <button class="btn-secondary" style="flex: 1;" onclick="window.eduApp.setRole('student')">🏠 Dashboard</button>
         </div>
+        <button class="btn-secondary" style="width: 100%; font-size: 0.75rem; opacity: 0.85;" onclick="window.eduApp.startSyncProcess(${JSON.stringify(diff.missingOnLocal).replace(/"/g, '&quot;')}, true)">
+          ⚡ Test Transfer Interruption & Resume
+        </button>
       `;
     }
   }
@@ -1577,7 +1236,7 @@ class EduSyncApp {
       await window.eduSyncEngine.executeTwoWaySync(
         missingResources,
         (progress) => {
-          titleLabel.textContent = `${progress.resourceTitle} (${progress.itemIndex}/${progress.totalItems})`;
+          titleLabel.textContent = `${progress.resourceTitle} (Item ${progress.itemIndex}/${progress.totalItems})`;
           progressBar.style.width = `${progress.percent}%`;
           percentLabel.textContent = `${progress.percent}%`;
           metaLabel.textContent = `Chunk ${progress.chunk}/${progress.totalChunks} • ${progress.transferredMB} MB / ${progress.totalMB} MB`;
@@ -1619,7 +1278,6 @@ class EduSyncApp {
     const res = await window.eduDB.getResource(resourceId);
     if (!res) return;
 
-    this.activeLessonResourceId = resourceId;
     document.getElementById('viewer-title').textContent = `${res.chapter}: ${res.title}`;
     const body = document.getElementById('viewer-content-body');
 
@@ -1629,76 +1287,51 @@ class EduSyncApp {
     }
 
     let extraMedia = '';
-    if (res.type === 'pdf') {
-      if (res.content?.pdfData) {
-        extraMedia = `
-          <div style="margin-bottom:12px;">
-            <object data="${res.content.pdfData}" type="application/pdf" class="pdf-preview-box">
-              <iframe src="${res.content.pdfData}" class="pdf-preview-box" style="border:none;">
-                <p>PDF preview not supported in this viewer.</p>
-              </iframe>
-            </object>
-            <a href="${res.content.pdfData}" download="${res.title}.pdf" class="btn-secondary btn-sm" style="margin-top:4px; display:inline-block; text-decoration:none;">
-              📥 Download / Open PDF
-            </a>
-          </div>
-        `;
-      } else {
-        extraMedia = `
-          <div style="background:var(--bg-surface-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:12px; margin-bottom:12px; text-align:center;">
-            <div style="font-size:1.6rem; margin-bottom:4px;">📄</div>
-            <div style="font-size:0.85rem; font-weight:600; color:var(--text-main);">PDF Document Ready</div>
-            <div style="font-size:0.72rem; color:var(--text-secondary);">Offline PDF Study Material</div>
-          </div>
-        `;
-      }
-    } else if (res.type === 'audio') {
+    if (res.type === 'audio') {
       extraMedia = `
-        <div style="background:var(--bg-surface-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:12px; margin-bottom:12px; text-align:center;">
-          <div style="font-size:1.6rem; margin-bottom:4px;">🎧</div>
-          <div style="font-size:0.85rem; font-weight:600; color:var(--text-main);">Offline Audio Lesson</div>
-          <div style="font-size:0.72rem; color:var(--text-secondary);">High-efficiency Audio Stream</div>
+        <div style="background:rgba(168,85,247,0.15); border:1px solid rgba(168,85,247,0.3); border-radius:12px; padding:12px; margin-bottom:12px; text-align:center;">
+          <div style="font-size:1.8rem; margin-bottom:4px;">🎧</div>
+          <div style="font-size:0.85rem; font-weight:600; color:#c084fc;">Offline Audio Explanation Playing</div>
+          <div style="font-size:0.72rem; color:var(--text-secondary);">High-efficiency Opus Audio (Offline Cache)</div>
         </div>
       `;
     } else if (res.type === 'video') {
       extraMedia = `
-        <div style="background:var(--bg-surface-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:12px; margin-bottom:12px; text-align:center;">
-          <div style="font-size:1.6rem; margin-bottom:4px;">🎥</div>
-          <div style="font-size:0.85rem; font-weight:600; color:var(--text-main);">Interactive Video Module</div>
-          <div style="font-size:0.72rem; color:var(--text-secondary);">Compressed H.264 Video Lesson</div>
+        <div style="background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); border-radius:12px; padding:12px; margin-bottom:12px; text-align:center;">
+          <div style="font-size:1.8rem; margin-bottom:4px;">🎥</div>
+          <div style="font-size:0.85rem; font-weight:600; color:#34d399;">Offline Interactive Video Module</div>
+          <div style="font-size:0.72rem; color:var(--text-secondary);">Compressed H.264 Low-Bandwidth Stream</div>
         </div>
       `;
     }
 
     body.innerHTML = `
       ${extraMedia}
-      <div style="margin-bottom: 8px; font-weight:700; color:var(--primary); font-size:0.85rem;">
+      <div style="margin-bottom: 12px; font-weight:600; color:var(--primary);">
         Summary & Concept Overview
       </div>
-      <p style="margin-bottom: 12px; color:var(--text-main); font-size:0.85rem;">
+      <p style="margin-bottom: 14px; color:var(--text-main); font-size:0.88rem;">
         ${res.content?.summary || 'Educational lesson notes available offline.'}
       </p>
-      ${keyPointsHtml ? `
-        <div style="margin-bottom: 6px; font-weight:700; color:var(--primary); font-size:0.85rem;">
-          Key Learning Points
-        </div>
-        <div style="margin-bottom: 12px;">
-          ${keyPointsHtml}
-        </div>
-      ` : ''}
+      <div style="margin-bottom: 8px; font-weight:600; color:var(--primary);">
+        Key Learning Highlights
+      </div>
+      <div style="margin-bottom: 14px;">
+        ${keyPointsHtml}
+      </div>
       ${res.content?.formulae ? `
-        <div style="background:var(--bg-surface-elevated); border:1px solid var(--primary-border); border-radius:6px; padding:8px 10px; margin-bottom:10px; font-family:monospace; font-size:0.8rem; color:var(--primary);">
+        <div style="background:rgba(0,210,255,0.08); border:1px solid rgba(0,210,255,0.2); border-radius:8px; padding:10px; margin-bottom:12px; font-family:monospace; font-size:0.82rem; color:var(--primary);">
           📐 Key Formula: ${res.content.formulae}
         </div>
       ` : ''}
       ${res.content?.sampleProblem ? `
-        <div style="background:var(--bg-surface-elevated); border-radius:6px; padding:8px 10px; font-size:0.8rem; margin-bottom:10px;">
+        <div style="background:rgba(255,255,255,0.04); border-radius:8px; padding:10px; font-size:0.82rem;">
           <b>💡 Practice Question:</b> ${res.content.sampleProblem}
         </div>
       ` : ''}
-      <div style="display:flex; justify-content:space-between; margin-top:10px; font-size:0.7rem; color:var(--text-secondary);">
-        <span>Author: ${res.createdBy || 'Teacher'}</span>
-        <span>Verified Hash: ✓</span>
+      <div style="display:flex; justify-content:space-between; margin-top:14px; font-size:0.72rem; color:var(--text-secondary);">
+        <span>Author: ${res.createdBy}</span>
+        <span>Version: ${res.version} &bull; Verified Hash: ✓</span>
       </div>
     `;
 
@@ -1713,4 +1346,3 @@ if (document.readyState === 'loading') {
 } else {
   window.eduApp.init();
 }
-
