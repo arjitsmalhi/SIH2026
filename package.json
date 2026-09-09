@@ -1,7 +1,7 @@
 {
-  "name": "edusync",
+  "name": "ruralrise",
   "version": "1.0.0",
-  "description": "Offline Rural Education Platform with Real Bluetooth P2P Synchronization",
+  "description": "RuralRise — Offline Rural Education Platform with Real Bluetooth P2P Synchronization",
   "main": "index.html",
   "scripts": {
     "build": "node scripts/build-web.js",
@@ -19,9 +19,10 @@
     "p2p",
     "bluetooth",
     "capacitor",
-    "sih"
+    "sih",
+    "ruralrise"
   ],
-  "author": "EduSync Team",
+  "author": "RuralRise Team",
   "license": "MIT",
   "dependencies": {
     "@capacitor-community/bluetooth-le": "^6.0.0",

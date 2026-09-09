@@ -1,4 +1,4 @@
-// EduSync Main Application Controller
+// RuralRise Main Application Controller
 class EduSyncApp {
   constructor() {
     this.currentRole = null; // 'teacher' | 'student'
@@ -13,6 +13,8 @@ class EduSyncApp {
     this.currentTransferResource = null;
     this.discoveredPeers = [];
     this.radarSearchQuery = '';
+    this.currentTheme = localStorage.getItem('ruralrise_theme') || 'dark';
+    this.currentViewingResourceId = null;
     
     // Attached file state for Add Resource
     this.attachedFileData = null;
@@ -21,7 +23,10 @@ class EduSyncApp {
   }
 
   async init() {
-    console.log('[EduSync] Initializing offline platform...');
+    console.log('[RuralRise] Initializing offline platform...');
+
+    // 0. Initialize theme immediately
+    this.initTheme();
 
     // 1. Immediately bind UI events and render home screen without blocking
     this.bindEvents();
@@ -38,17 +43,17 @@ class EduSyncApp {
     try {
       if (window.eduDB) {
         await window.eduDB.init();
-        console.log('[EduSync] Offline Database ready');
+        console.log('[RuralRise] Offline Database ready');
       }
     } catch (err) {
-      console.warn('[EduSync] Offline DB init issue:', err);
+      console.warn('[RuralRise] Offline DB init issue:', err);
     }
     
     // 3. Register Service Worker if supported
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js')
-        .then(() => console.log('[EduSync] Service worker active'))
-        .catch((err) => console.warn('[EduSync] SW registration failed:', err));
+        .then(() => console.log('[RuralRise] Service worker active'))
+        .catch((err) => console.warn('[RuralRise] SW registration failed:', err));
     }
   }
 
@@ -135,10 +140,9 @@ class EduSyncApp {
     // 1. Display prominent top toast notification
     this.showResourceReceivedToast(resource);
 
-    // 2. Alert notification for guaranteed user awareness
-    alert(`New Lesson Received from Teacher\n\n"${resource.title}" (${resource.chapter})\nSaved for offline study.`);
-
-    // 3. Refresh active student screens immediately
+    // The sync engine has already persisted the complete resource before this
+    // callback, so notify without blocking the student with a modal alert.
+    // Refresh active screens immediately.
     if (this.activeScreen === 'screen-student-learning') {
       this.renderStudentLearning();
     } else if (this.activeScreen === 'screen-sync-center') {
@@ -174,7 +178,7 @@ class EduSyncApp {
       <div style="flex: 1; min-width: 0;">
         <div style="font-size: 0.75rem; color: var(--primary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">New Resource Received</div>
         <div style="font-size: 0.95rem; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${resource.title}</div>
-        <div style="font-size: 0.75rem; color: #888888;">${resource.chapter} • Saved for Offline Study</div>
+        <div style="font-size: 0.75rem; color: #888888;">${resource.chapter} • Saved on this device</div>
       </div>
       <button class="btn-primary btn-sm" style="font-size: 0.8rem; padding: 8px 12px; width: auto;" onclick="document.getElementById('toast-resource-received').remove(); window.eduApp.openLessonViewer('${resource.resourceId}');">
         Open
@@ -258,6 +262,9 @@ class EduSyncApp {
     });
 
     // Drawer Generic & Common Footer items
+    document.getElementById('drawer-nav-theme-toggle')?.addEventListener('click', () => {
+      this.toggleTheme();
+    });
     document.getElementById('drawer-nav-select-role')?.addEventListener('click', () => {
       this.switchRole();
     });
@@ -398,22 +405,34 @@ class EduSyncApp {
   onResourceTypeChanged() {
     const typeSelect = document.getElementById('res-input-type');
     const dropZoneText = document.getElementById('drop-zone-text');
+    const fileInput = document.getElementById('res-input-file');
     if (!typeSelect || !dropZoneText) return;
     
     const type = typeSelect.value;
     if (type === 'pdf') {
       dropZoneText.textContent = 'Click to choose PDF document or drag & drop here';
+      if (fileInput) fileInput.accept = '.pdf,application/pdf';
     } else if (type === 'audio') {
       dropZoneText.textContent = 'Click to choose Audio recording or drag & drop here';
+      if (fileInput) fileInput.accept = '.mp3,audio/*';
     } else if (type === 'video') {
       dropZoneText.textContent = 'Click to choose Video file or drag & drop here';
+      if (fileInput) fileInput.accept = '.mp4,video/*';
     } else {
       dropZoneText.textContent = 'Click to attach supplementary file (optional)';
+      if (fileInput) fileInput.accept = '.pdf,.doc,.docx,.txt,.epub,.mp3,.mp4';
     }
   }
 
   handleFileSelect(file) {
     if (!file) return;
+    const selectedType = document.getElementById('res-input-type')?.value;
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (selectedType === 'pdf' && !isPdf) {
+      alert('Please choose a PDF file for this resource.');
+      this.clearSelectedFile();
+      return;
+    }
     this.attachedFileData = file;
     this.attachedFileName = file.name;
     
@@ -450,6 +469,20 @@ class EduSyncApp {
     if (badge) badge.style.display = 'none';
   }
 
+  async readAttachedFile() {
+    if (!this.attachedFileData) return null;
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({
+        data: reader.result,
+        mimeType: this.attachedFileData.type || 'application/octet-stream'
+      });
+      reader.onerror = () => reject(reader.error || new Error('Unable to read the selected document.'));
+      reader.readAsDataURL(this.attachedFileData);
+    });
+  }
+
   // --- Drawer Controls ---
   openDrawer() {
     const teacherNav = document.getElementById('nav-drawer-menu-teacher');
@@ -479,6 +512,8 @@ class EduSyncApp {
       langText.textContent = window.i18n.currentLang === 'hi' ? 'हिंदी (English)' : 'English (हिंदी)';
     }
 
+    this.updateDrawerThemeUI();
+
     this.isDrawerOpen = true;
     document.getElementById('nav-drawer')?.classList.add('active');
     document.getElementById('nav-drawer-backdrop')?.classList.add('active');
@@ -500,6 +535,54 @@ class EduSyncApp {
     }
   }
 
+  // --- Theme Switching (Dark & Light Mode) ---
+  initTheme() {
+    this.currentTheme = localStorage.getItem('ruralrise_theme') || 'dark';
+    this.applyTheme(this.currentTheme);
+  }
+
+  applyTheme(theme) {
+    this.currentTheme = theme;
+    localStorage.setItem('ruralrise_theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
+    if (theme === 'light') {
+      document.body.classList.add('theme-light');
+      document.body.classList.remove('theme-dark');
+    } else {
+      document.body.classList.add('theme-dark');
+      document.body.classList.remove('theme-light');
+    }
+    this.updateDrawerThemeUI();
+  }
+
+  toggleTheme() {
+    const nextTheme = this.currentTheme === 'light' ? 'dark' : 'light';
+    this.applyTheme(nextTheme);
+  }
+
+  updateDrawerThemeUI() {
+    const isDark = this.currentTheme === 'dark';
+    const textEl = document.getElementById('drawer-theme-text');
+    const subtextEl = document.getElementById('drawer-theme-subtext');
+    const statusEl = document.getElementById('drawer-theme-status');
+    const iconEl = document.getElementById('drawer-theme-icon');
+
+    if (textEl) {
+      textEl.textContent = isDark ? (window.i18n ? window.i18n.t('darkMode') : 'Dark Mode') : (window.i18n ? window.i18n.t('lightMode') : 'Light Mode');
+    }
+    if (subtextEl) {
+      subtextEl.textContent = isDark ? 'Tap to switch to Light mode' : 'Tap to switch to Dark mode';
+    }
+    if (statusEl) {
+      statusEl.textContent = isDark ? 'Dark' : 'Light';
+    }
+    if (iconEl) {
+      iconEl.innerHTML = isDark
+        ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>'
+        : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>';
+    }
+  }
+
   toggleLanguage() {
     window.i18n.toggleLanguage();
     this.closeDrawer();
@@ -511,6 +594,12 @@ class EduSyncApp {
     document.getElementById('modal-about')?.classList.add('active');
   }
 
+  renderHome() {
+    this.closeDrawer();
+    this.navigationHistory = [];
+    this.renderScreen('screen-role-select', false);
+  }
+
   switchRole() {
     this.closeDrawer();
     this.navigationHistory = [];
@@ -519,6 +608,228 @@ class EduSyncApp {
     }
     this.currentRole = null;
     this.renderScreen('screen-role-select', false);
+  }
+
+  // --- Study Section: Lesson Viewer & Student Doubts ---
+  async openLessonViewer(resourceId) {
+    const modal = document.getElementById('modal-lesson-viewer');
+    const container = document.getElementById('viewer-content-body');
+    const titleEl = document.getElementById('viewer-title');
+    if (!modal || !container) return;
+
+    const res = await window.eduDB.getResource(resourceId);
+    if (!res) {
+      alert('Resource details could not be found.');
+      return;
+    }
+
+    if (titleEl) {
+      titleEl.textContent = res.title;
+    }
+
+    this.currentViewingResourceId = resourceId;
+
+    // Fetch doubts for this resource
+    const doubts = await window.eduDB.getDoubtsByResource(resourceId);
+
+    let pointsHtml = '';
+    if (res.content && Array.isArray(res.content.keyPoints)) {
+      res.content.keyPoints.forEach(pt => {
+        pointsHtml += `<div class="lesson-key-point">${pt}</div>`;
+      });
+    }
+
+    let formulaHtml = '';
+    if (res.content && res.content.formulae) {
+      formulaHtml = `
+        <div class="lesson-section-box">
+          <div class="lesson-section-heading">Core Formulae & Rules</div>
+          <div class="lesson-formula-box">${res.content.formulae}</div>
+        </div>
+      `;
+    }
+
+    let sampleProblemHtml = '';
+    if (res.content && res.content.sampleProblem) {
+      sampleProblemHtml = `
+        <div class="lesson-section-box">
+          <div class="lesson-section-heading">Practical Example / Application</div>
+          <div style="font-size:0.86rem; color:var(--text-main); line-height:1.5;">${res.content.sampleProblem}</div>
+        </div>
+      `;
+    }
+
+    let fileAttachmentHtml = '';
+    if (res.fileData) {
+      fileAttachmentHtml = `
+        <div class="lesson-section-box" style="background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.3);">
+          <div class="lesson-section-heading">Attached Document / Media</div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <span style="font-size:0.82rem; font-weight:600;">${res.fileName || 'Attached Educational Resource'} (${res.fileSize})</span>
+            <a href="${res.fileData}" download="${res.fileName || res.title + '.pdf'}" class="btn-primary btn-sm" style="width:auto; padding:6px 12px; font-size:0.78rem; text-decoration:none;">
+              Download / Open File
+            </a>
+          </div>
+        </div>
+      `;
+    }
+
+    let doubtsListHtml = '';
+    if (doubts.length > 0) {
+      doubts.forEach(d => {
+        const isResolved = d.status === 'resolved';
+        const statusClass = isResolved ? 'resolved' : '';
+        const statusLabel = isResolved ? window.i18n.t('doubtStatusResolved') : window.i18n.t('doubtStatusPending');
+        const formattedDate = new Date(d.createdAt).toLocaleDateString() + ' ' + new Date(d.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        let answerHtml = '';
+        if (d.answer) {
+          answerHtml = `
+            <div class="doubt-answer-box">
+              <div class="doubt-answer-label">Teacher Explanation</div>
+              <div>${d.answer}</div>
+            </div>
+          `;
+        }
+
+        doubtsListHtml += `
+          <div class="doubt-card">
+            <div class="doubt-card-header">
+              <span class="doubt-author-pill">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                ${d.studentName || 'Student'}
+              </span>
+              <span class="doubt-status-pill ${statusClass}">${statusLabel}</span>
+            </div>
+            <div class="doubt-question-text">${d.question}</div>
+            ${answerHtml}
+            <div class="doubt-timestamp">${formattedDate} &bull; ${d.chapter || res.chapter}</div>
+          </div>
+        `;
+      });
+    } else {
+      doubtsListHtml = `
+        <div style="font-size:0.8rem; color:var(--text-secondary); text-align:center; padding:10px 0;">
+          ${window.i18n.t('noDoubtsLesson')}
+        </div>
+      `;
+    }
+
+    container.innerHTML = `
+      <!-- Header meta badge -->
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-subtle); padding-bottom:8px;">
+        <span class="res-type-badge type-${res.type}">${(res.type || 'DOC').toUpperCase()}</span>
+        <span style="font-size:0.75rem; color:var(--text-secondary); font-weight:600;">Class ${res.class} &bull; ${res.subject} &bull; ${res.chapter}</span>
+      </div>
+
+      <!-- Summary -->
+      <div class="lesson-section-box">
+        <div class="lesson-section-heading">Concept Summary</div>
+        <p style="font-size:0.88rem; line-height:1.5;">${res.content?.summary || 'Comprehensive educational notes for offline learning.'}</p>
+      </div>
+
+      <!-- Key Points -->
+      ${pointsHtml ? `
+        <div class="lesson-section-box">
+          <div class="lesson-section-heading">Key Learnings & Points</div>
+          ${pointsHtml}
+        </div>
+      ` : ''}
+
+      ${formulaHtml}
+      ${sampleProblemHtml}
+      ${fileAttachmentHtml}
+
+      <!-- Doubts Section -->
+      <div class="doubt-section-container" id="lesson-viewer-doubt-section">
+        <div class="doubt-box-header">
+          <span class="doubt-box-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--primary);"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            ${window.i18n.t('lessonDoubts')} (${doubts.length})
+          </span>
+          <button type="button" class="btn-primary btn-sm" style="width:auto; padding:4px 10px; font-size:0.75rem;" onclick="window.eduApp.toggleDoubtFormInViewer()">
+            + ${window.i18n.t('askDoubt')}
+          </button>
+        </div>
+
+        <!-- Collapsible Ask Doubt Form -->
+        <div class="doubt-form-wrapper" id="viewer-doubt-form" style="display:none;">
+          <div style="font-size:0.82rem; font-weight:700; color:var(--primary);">
+            ${window.i18n.t('askDoubtTitle')}
+          </div>
+          <p style="font-size:0.75rem; color:var(--text-secondary); margin:0;">
+            ${window.i18n.t('doubtPrompt')}
+          </p>
+          <div class="form-group" style="margin-top:4px;">
+            <label style="font-size:0.75rem;">${window.i18n.t('yourName')}</label>
+            <input type="text" class="form-control" id="doubt-input-author" placeholder="e.g. Rahul Sharma (Roll 14)" value="${localStorage.getItem('student_name') || ''}" style="font-size:0.82rem; padding:6px 10px;">
+          </div>
+          <div class="form-group">
+            <label style="font-size:0.75rem;">Your Doubt / Question</label>
+            <textarea class="form-control" id="doubt-input-question" rows="3" placeholder="${window.i18n.t('doubtPlaceholder')}" style="font-size:0.82rem; padding:8px 10px;"></textarea>
+          </div>
+          <div style="display:flex; gap:6px; justify-content:flex-end;">
+            <button type="button" class="btn-secondary btn-sm" style="width:auto; padding:6px 12px;" onclick="window.eduApp.toggleDoubtFormInViewer()">Cancel</button>
+            <button type="button" class="btn-primary btn-sm" style="width:auto; padding:6px 14px;" onclick="window.eduApp.submitLessonDoubt('${res.resourceId}')">
+              ${window.i18n.t('submitDoubt')}
+            </button>
+          </div>
+        </div>
+
+        <!-- Doubts List -->
+        <div class="doubt-list-container" id="viewer-doubt-list">
+          ${doubtsListHtml}
+        </div>
+      </div>
+    `;
+
+    modal.classList.add('active');
+  }
+
+  toggleDoubtFormInViewer() {
+    const form = document.getElementById('viewer-doubt-form');
+    if (!form) return;
+    const isHidden = form.style.display === 'none';
+    form.style.display = isHidden ? 'flex' : 'none';
+    if (isHidden) {
+      const input = document.getElementById('doubt-input-question');
+      if (input) setTimeout(() => input.focus(), 100);
+      form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  async submitLessonDoubt(resourceId) {
+    const authorInput = document.getElementById('doubt-input-author');
+    const questionInput = document.getElementById('doubt-input-question');
+    if (!questionInput || !questionInput.value.trim()) {
+      alert('Please enter your doubt or question before submitting.');
+      return;
+    }
+
+    const res = await window.eduDB.getResource(resourceId);
+    const authorName = authorInput?.value.trim() || localStorage.getItem('student_name') || 'Student';
+    localStorage.setItem('student_name', authorName);
+
+    const newDoubt = {
+      doubtId: 'DBT_' + Math.random().toString(36).substring(2, 9).toUpperCase(),
+      resourceId: resourceId,
+      resourceTitle: res?.title || 'Educational Lesson',
+      subject: res?.subject || 'general',
+      chapter: res?.chapter || 'General',
+      class: res?.class || this.selectedClass,
+      studentId: 'STU_' + authorName.replace(/\s+/g, '_').toLowerCase(),
+      studentName: authorName,
+      question: questionInput.value.trim(),
+      answer: null,
+      status: 'pending_sync', // 'pending_sync' | 'resolved'
+      createdAt: new Date().toISOString()
+    };
+
+    await window.eduDB.addDoubt(newDoubt);
+    alert(`${window.i18n.t('doubtPosted')}\n\n${window.i18n.t('doubtPostedMsg')}`);
+
+    // Refresh lesson viewer to show new doubt immediately
+    this.openLessonViewer(resourceId);
   }
 
   // --- Screen Navigation & History ---
@@ -771,7 +1082,7 @@ class EduSyncApp {
 
     if (!isConnected) {
       const pairingCode = window.eduTransport.myDeviceInfo?.pairingCode || '----';
-      alert(`No student device is currently connected.\n\nTo share this resource over Bluetooth:\n1. Ask student to open EduSync\n2. Student taps "CONNECT TO TEACHER (BLUETOOTH)"\n3. Student enters your 4-digit code: ${pairingCode}`);
+      alert(`No EduSync device is currently connected.\n\nTo share this resource over Bluetooth:\n1. Ask the other teacher or student to open EduSync\n2. Open the nearby-device scanner on that device\n3. Enter your 4-digit code: ${pairingCode}`);
       return;
     }
 
@@ -781,17 +1092,8 @@ class EduSyncApp {
     try {
       console.log(`[Teacher BT] Pushing resource "${res.title}" to ${studentName}...`);
       
-      // 1. Send direct atomic resource packet
-      await window.eduTransport.sendPacketOverTransport({
-        type: 'DIRECT_RESOURCE',
-        resource: {
-          ...res,
-          isAvailableOffline: true,
-          syncedAt: new Date().toISOString()
-        }
-      });
-
-      // 2. Also stream chunked packets for visual progress bar sync
+      // Stream the resource in BLE-safe chunks so PDFs and other documents are
+      // delivered reliably to every connected EduSync peer.
       await window.eduTransport.transferResourceChunks(res);
       
       // 3. Announce updated manifest
@@ -803,10 +1105,10 @@ class EduSyncApp {
         manifest: manifest
       });
 
-      alert(`"${res.title}" shared with ${studentName} successfully over Bluetooth.`);
+      alert(`Resource shared successfully!\n\n"${res.title}" was sent to ${studentName} over Bluetooth.`);
     } catch (err) {
       console.error('[Teacher] Error sharing resource:', err);
-      alert(`Error transferring "${res.title}" to student: ${err.message || err}`);
+      alert(`Resource saved on this device.\n\nBluetooth sharing is currently unavailable.`);
     }
   }
 
@@ -824,8 +1126,27 @@ class EduSyncApp {
       return;
     }
 
+    if (type === 'pdf') {
+      const attachedIsPdf = this.attachedFileData && (
+        this.attachedFileData.type === 'application/pdf' ||
+        this.attachedFileData.name.toLowerCase().endsWith('.pdf')
+      );
+      if (!attachedIsPdf) {
+        alert('Please attach a PDF before saving this resource.');
+        return;
+      }
+    }
+
     const keyPoints = pointsStr ? pointsStr.split('\n').filter(p => p.trim().length > 0) : ['Key concept explanation and examples.'];
     const calculatedFileSize = this.attachedFileSize || (Math.random() * 2 + 1).toFixed(1) + ' MB';
+    let attachedFile = null;
+    try {
+      attachedFile = await this.readAttachedFile();
+    } catch (err) {
+      console.error('[EduSync] Document read failed:', err);
+      alert(`Unable to attach "${this.attachedFileName}". Please choose the file again.`);
+      return;
+    }
 
     const newRes = {
       resourceId: 'RES_' + Math.random().toString(36).substring(2, 9).toUpperCase(),
@@ -836,6 +1157,8 @@ class EduSyncApp {
       type: type,
       fileSize: calculatedFileSize,
       fileName: this.attachedFileName || null,
+      fileData: attachedFile ? attachedFile.data : null,
+      fileMimeType: attachedFile ? attachedFile.mimeType : null,
       version: 1,
       hash: 'hash_' + Math.random().toString(36).substring(2, 8),
       createdBy: 'Teacher',
@@ -863,13 +1186,7 @@ class EduSyncApp {
       try {
         console.log(`[Teacher BT] Auto-sharing new resource "${newRes.title}" with ${studentName}...`);
         
-        // 1. Direct atomic packet transfer
-        await window.eduTransport.sendPacketOverTransport({
-          type: 'DIRECT_RESOURCE',
-          resource: newRes
-        });
-
-        // 2. Stream chunked packets
+        // Stream the resource in BLE-safe chunks.
         await window.eduTransport.transferResourceChunks(newRes);
         
         // 3. Broadcast updated manifest
@@ -881,10 +1198,10 @@ class EduSyncApp {
           manifest: manifest
         });
 
-        alert(`Resource "${newRes.title}" created and shared with ${studentName} over Bluetooth.`);
+        alert(`Resource shared successfully!\n\n"${newRes.title}" was created and sent to ${studentName} over Bluetooth.`);
       } catch (err) {
         console.error('[Teacher] Error auto-sharing resource:', err);
-        alert(`Resource created locally, but Bluetooth transfer failed: ${err.message || err}`);
+        alert(`Resource created and saved locally.\n\nBluetooth sharing is currently unavailable.`);
       }
     } else {
       alert(`Resource "${newRes.title}" added to curriculum.`);
@@ -921,8 +1238,8 @@ class EduSyncApp {
     if (window.eduSyncEngine && window.eduSyncEngine.latestTeacherManifest) {
       window.eduSyncEngine.latestTeacherManifest.forEach(tm => {
         if (!localMap.has(tm.resourceId)) {
-          if ((!this.selectedClass || tm.class === this.selectedClass.toString()) &&
-              (!this.selectedSubject || this.selectedSubject === 'all' || tm.subject?.toLowerCase() === this.selectedSubject.toLowerCase())) {
+          if ((!this.selectedClass || tm.class?.toString().trim() === this.selectedClass.toString().trim()) &&
+              (!this.selectedSubject || this.selectedSubject === 'all' || tm.subject?.toString().trim().toLowerCase() === this.selectedSubject.toLowerCase())) {
             combinedResources.push({
               ...tm,
               isAvailableOffline: false
@@ -1166,22 +1483,61 @@ class EduSyncApp {
     document.getElementById('stat-active-students').textContent = uniqueStudents.size || 1;
 
     if (submissions.length === 0) {
-      container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-secondary);">${window.i18n.t('noSubmissionsYet')}</div>`;
-      return;
+      container.innerHTML = `<div style="text-align:center; padding:16px; color:var(--text-secondary);">${window.i18n.t('noSubmissionsYet')}</div>`;
+    } else {
+      submissions.forEach((sub) => {
+        const card = document.createElement('div');
+        card.className = 'peer-card';
+        card.innerHTML = `
+          <div class="peer-info">
+            <h4>${sub.studentName} — ${sub.quizTitle}</h4>
+            <p>Score: <b style="color:var(--primary);">${sub.score}/${sub.total} (${sub.percentage}%)</b> &bull; Class ${sub.class} &bull; ${new Date(sub.completedAt).toLocaleDateString()}</p>
+          </div>
+          <span class="status-pill">Synced</span>
+        `;
+        container.appendChild(card);
+      });
     }
 
-    submissions.forEach((sub) => {
-      const card = document.createElement('div');
-      card.className = 'peer-card';
-      card.innerHTML = `
-        <div class="peer-info">
-          <h4>${sub.studentName} — ${sub.quizTitle}</h4>
-          <p>Score: <b style="color:var(--primary);">${sub.score}/${sub.total} (${sub.percentage}%)</b> &bull; Class ${sub.class} &bull; ${new Date(sub.completedAt).toLocaleDateString()}</p>
-        </div>
-        <span class="status-pill">Synced</span>
-      `;
-      container.appendChild(card);
-    });
+    // Render Student Doubts list for teacher
+    const doubtsContainer = document.getElementById('teacher-doubts-list');
+    if (doubtsContainer) {
+      doubtsContainer.innerHTML = '';
+      const allDoubts = await window.eduDB.getAllDoubts();
+      if (allDoubts.length === 0) {
+        doubtsContainer.innerHTML = `<div style="text-align:center; padding:16px; color:var(--text-secondary);">No student doubts recorded yet. When students ask questions while studying lessons, they will appear here.</div>`;
+      } else {
+        allDoubts.forEach((d) => {
+          const card = document.createElement('div');
+          card.className = 'doubt-card';
+          const isResolved = d.status === 'resolved';
+          const statusLabel = isResolved ? window.i18n.t('doubtStatusResolved') : window.i18n.t('doubtStatusPending');
+          const statusClass = isResolved ? 'resolved' : '';
+          const formattedDate = new Date(d.createdAt).toLocaleDateString();
+
+          card.innerHTML = `
+            <div class="doubt-card-header">
+              <span class="doubt-author-pill">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                ${d.studentName || 'Student'} &bull; ${d.resourceTitle}
+              </span>
+              <span class="doubt-status-pill ${statusClass}">${statusLabel}</span>
+            </div>
+            <div class="doubt-question-text" style="margin: 4px 0;">${d.question}</div>
+            <div style="font-size: 0.72rem; color: var(--text-secondary); display:flex; justify-content:space-between; align-items:center;">
+              <span>Class ${d.class} &bull; ${d.subject} &bull; ${formattedDate}</span>
+              ${!isResolved ? `<button class="btn-primary btn-sm" style="width:auto; padding:2px 8px; font-size:0.72rem;" onclick="window.eduApp.resolveDoubt('${d.doubtId}')">Mark Resolved</button>` : ''}
+            </div>
+          `;
+          doubtsContainer.appendChild(card);
+        });
+      }
+    }
+  }
+
+  async resolveDoubt(doubtId) {
+    await window.eduDB.updateDoubtStatus(doubtId, 'resolved');
+    this.renderTeacherAnalytics(false);
   }
 
   // --- Nearby Radar & Device Discovery ---
@@ -1197,7 +1553,6 @@ class EduSyncApp {
 
     if (window.eduTransport.isNative) {
       try {
-        await window.eduTransport.fetchPairedDevices();
         await window.Capacitor.Plugins.BluetoothP2P.startScanning();
       } catch (e) {
         console.warn('[Bluetooth] Search trigger warning:', e);
@@ -1436,6 +1791,9 @@ class EduSyncApp {
 
     const diffContainer = document.getElementById('sync-diff-content');
     const syncActionContainer = document.getElementById('sync-action-controls');
+    if (syncActionContainer) {
+      syncActionContainer.style.display = 'flex';
+    }
 
     const peerInfo = window.eduTransport.connectedPeer;
     const isConnected = window.eduTransport.isConnected;
@@ -1485,6 +1843,7 @@ class EduSyncApp {
         </div>
       `;
       syncActionContainer.innerHTML = `
+        ${this.currentRole === 'student' ? `<button class="btn-primary" style="width: 100%;" onclick="window.eduApp.renderStudentLearning()">${window.i18n.t('backToLearningLibrary')}</button>` : ''}
         <button class="btn-primary" style="width: 100%;" onclick="window.eduApp.goBack()">Back to Previous Screen</button>
         <button class="btn-secondary" style="width: 100%;" onclick="window.eduApp.currentRole === 'teacher' ? window.eduApp.renderTeacherDashboard() : window.eduApp.renderStudentDashboard()">Back to Dashboard</button>
       `;
@@ -1517,6 +1876,7 @@ class EduSyncApp {
         <button class="btn-primary" id="btn-start-sync" onclick="window.eduApp.startSyncProcess(${JSON.stringify(diff.missingOnLocal).replace(/"/g, '&quot;')})">
           ${window.i18n.t('syncNow')} (${diff.missingOnLocal.length})
         </button>
+        ${this.currentRole === 'student' ? `<button class="btn-primary" style="width: 100%;" onclick="window.eduApp.renderStudentLearning()">${window.i18n.t('backToLearningLibrary')}</button>` : ''}
         <div style="display: flex; gap: 8px; width: 100%;">
           <button class="btn-secondary" style="flex: 1;" onclick="window.eduApp.goBack()">Back</button>
           <button class="btn-secondary" style="flex: 1;" onclick="window.eduApp.currentRole === 'teacher' ? window.eduApp.renderTeacherDashboard() : window.eduApp.renderStudentDashboard()">Dashboard</button>
@@ -1595,15 +1955,25 @@ class EduSyncApp {
     }
 
     let extraMedia = '';
-    if (res.type === 'audio') {
+    if (res.fileData) {
       extraMedia = `
+        <div style="background:#161616; border:1px solid #333333; border-radius:12px; padding:12px; margin-bottom:12px; text-align:center;">
+          <div style="font-size:0.85rem; font-weight:600; color:var(--text-main); margin-bottom:8px;">Attached Document</div>
+          <a class="btn-primary" href="${res.fileData}" download="${res.fileName || 'edusync-document'}" target="_blank" rel="noopener" style="display:inline-block; width:auto; text-decoration:none;">
+            Open / Download ${res.fileName || 'Document'}
+          </a>
+        </div>
+      `;
+    }
+    if (res.type === 'audio') {
+      extraMedia += `
         <div style="background:#161616; border:1px solid #333333; border-radius:12px; padding:12px; margin-bottom:12px; text-align:center;">
           <div style="font-size:0.85rem; font-weight:600; color:var(--text-main);">Offline Audio Explanation Playing</div>
           <div style="font-size:0.72rem; color:var(--text-secondary);">High-efficiency Opus Audio (Offline Cache)</div>
         </div>
       `;
     } else if (res.type === 'video') {
-      extraMedia = `
+      extraMedia += `
         <div style="background:#161616; border:1px solid #333333; border-radius:12px; padding:12px; margin-bottom:12px; text-align:center;">
           <div style="font-size:0.85rem; font-weight:600; color:var(--text-main);">Offline Interactive Video Module</div>
           <div style="font-size:0.72rem; color:var(--text-secondary);">Compressed H.264 Low-Bandwidth Stream</div>

@@ -1,10 +1,10 @@
-// EduSync Localization Engine (English & Hindi)
+// RuralRise Localization Engine (English & Hindi)
 const i18n = {
-  currentLang: localStorage.getItem('edusync_lang') || 'en',
+  currentLang: localStorage.getItem('ruralrise_lang') || localStorage.getItem('edusync_lang') || 'en',
 
   translations: {
     en: {
-      appName: 'EduSync',
+      appName: 'RuralRise',
       appTagline: 'Learn Offline. Sync Anywhere.',
       selectRole: 'Select Your Role to Begin',
       teacher: 'Teacher',
@@ -34,8 +34,9 @@ const i18n = {
       myProgress: 'My Scorecard',
       syncWithTeacher: 'Sync with Teacher',
       findNearbyTeachers: 'Find Nearby Teachers',
+      backToLearningLibrary: 'My Learning Library',
       
-      // Resource Details
+      // Resource Details & Viewer
       resourceTitle: 'Resource Title',
       subject: 'Subject',
       chapter: 'Chapter',
@@ -46,6 +47,23 @@ const i18n = {
       openResource: 'Open Lesson',
       downloadResource: 'Sync to Device',
       deleteResource: 'Delete',
+      doneReading: 'Done Reading',
+      
+      // Doubts Feature
+      askDoubt: 'Ask a Doubt',
+      askDoubtTitle: 'Have a Doubt in this Lesson?',
+      doubtPrompt: 'Type your question or query below. It will be saved offline and synced with your teacher.',
+      doubtPlaceholder: 'Describe your doubt or question clearly (e.g., How does the transposition method work in step 2?)...',
+      yourName: 'Your Name / Student ID',
+      submitDoubt: 'Post Doubt',
+      doubtPosted: 'Doubt Recorded Offline',
+      doubtPostedMsg: 'Your doubt has been saved! It will automatically sync to your teacher during your next Bluetooth connection.',
+      lessonDoubts: 'Doubts Asked on this Lesson',
+      noDoubtsLesson: 'No doubts posted for this lesson yet. Feel free to ask anytime!',
+      studentDoubts: 'Student Doubts & Questions',
+      allDoubts: 'All Doubts',
+      doubtStatusPending: 'Pending Teacher Review',
+      doubtStatusResolved: 'Answered / Resolved',
       
       // Resource Types
       pdf: 'PDF Document',
@@ -75,7 +93,7 @@ const i18n = {
       
       // Sync & Pairing
       nearbyDevices: 'Nearby Devices Radar',
-      searchingNearby: 'Scanning for nearby EduSync devices...',
+      searchingNearby: 'Scanning for nearby RuralRise devices...',
       connect: 'Connect',
       connectedTo: 'Connected to',
       disconnect: 'Disconnect',
@@ -100,14 +118,14 @@ const i18n = {
       activeLearners: 'Active Learners',
       noSubmissionsYet: 'No quiz submissions synced yet. Connect with students to sync their results.',
       
-      // General UI
+      // General UI & Theme
       dashboard: 'Dashboard',
       menu: 'Menu',
       helpAbout: 'Help / About',
       switchRole: 'Switch Role',
       navigation: 'Navigation',
-      aboutTitle: 'About EduSync',
-      aboutDesc: 'EduSync is an offline-first educational platform designed for rural schools. It enables teachers and students to share lessons, complete quizzes, and sync student scores peer-to-peer using Bluetooth without needing any internet connection.',
+      aboutTitle: 'About RuralRise',
+      aboutDesc: 'RuralRise is an offline-first educational platform designed for rural schools. It enables teachers and students to share lessons, complete quizzes, ask doubts, and sync student progress peer-to-peer using Bluetooth without needing any internet connection.',
       versionLabel: 'Version',
       appMode: 'Mode',
       offlineMeshReady: '100% Offline P2P Mesh',
@@ -119,11 +137,14 @@ const i18n = {
       switchLanguage: 'हिंदी में बदलें',
       status: 'Status',
       mode: 'Mode',
+      theme: 'Theme',
+      darkMode: 'Dark Mode',
+      lightMode: 'Light Mode',
       offlineModeBadge: '100% Offline Ready',
       p2pActiveBadge: 'P2P Mesh Ready'
     },
     hi: {
-      appName: 'एडुसिंक (EduSync)',
+      appName: 'रूरलराइज़ (RuralRise)',
       appTagline: 'ऑफ़लाइन सीखें। कहीं भी सिंक करें।',
       selectRole: 'शुरू करने के लिए अपनी भूमिका चुनें',
       teacher: 'शिक्षक (Teacher)',
@@ -153,8 +174,9 @@ const i18n = {
       myProgress: 'मेरा प्रगति पत्र (Scorecard)',
       syncWithTeacher: 'शिक्षक के साथ सिंक करें',
       findNearbyTeachers: 'पास के शिक्षक खोजें',
+      backToLearningLibrary: 'मेरी शिक्षण लाइब्रेरी',
       
-      // Resource Details
+      // Resource Details & Viewer
       resourceTitle: 'पाठ का नाम',
       subject: 'विषय',
       chapter: 'अध्याय',
@@ -165,6 +187,23 @@ const i18n = {
       openResource: 'पाठ खोलें',
       downloadResource: 'डिवाइस में सिंक करें',
       deleteResource: 'हटाएं',
+      doneReading: 'पढ़ाई पूरी हुई',
+      
+      // Doubts Feature
+      askDoubt: 'शंका / प्रश्न पूछें',
+      askDoubtTitle: 'क्या इस पाठ में कोई शंका है?',
+      doubtPrompt: 'अपना प्रश्न नीचे लिखें। यह ऑफ़लाइन सुरक्षित रहेगा और शिक्षक से कनेक्ट होने पर सिंक हो जाएगा।',
+      doubtPlaceholder: 'अपनी शंका या प्रश्न विस्तार से लिखें (उदा. चरण 2 में पक्षांतरण विधि कैसे काम करती है?)...',
+      yourName: 'आपका नाम / रोल नंबर',
+      submitDoubt: 'शंका भेजें',
+      doubtPosted: 'शंका ऑफ़लाइन दर्ज हुई',
+      doubtPostedMsg: 'आपकी शंका सुरक्षित हो गई है! अगली बार ब्लूटूथ से जुड़ने पर यह आपके शिक्षक के पास पहुंच जाएगी।',
+      lessonDoubts: 'इस पाठ पर पूछी गई शंकाएं',
+      noDoubtsLesson: 'इस पाठ पर अभी तक कोई शंका नहीं पूछी गई है। आप कभी भी पूछ सकते हैं!',
+      studentDoubts: 'विद्यार्थियों की शंकाएं व प्रश्न',
+      allDoubts: 'सभी शंकाएं',
+      doubtStatusPending: 'शिक्षक की समीक्षा प्रतीक्षित',
+      doubtStatusResolved: 'समाधान / उत्तर दिया गया',
       
       // Resource Types
       pdf: 'पीडीएफ़ दस्तावेज़',
@@ -194,7 +233,7 @@ const i18n = {
       
       // Sync & Pairing
       nearbyDevices: 'आस-पास के डिवाइस रडार',
-      searchingNearby: 'आस-पास के एडुसिंक डिवाइस खोजे जा रहे हैं...',
+      searchingNearby: 'आस-पास के रूरलराइज़ डिवाइस खोजे जा रहे हैं...',
       connect: 'कनेक्ट करें',
       connectedTo: 'जुड़ा हुआ है',
       disconnect: 'डिस्कनेक्ट',
@@ -219,14 +258,14 @@ const i18n = {
       activeLearners: 'सक्रिय शिक्षार्थी',
       noSubmissionsYet: 'अभी कोई परिणाम सिंक नहीं हुआ है। विद्यार्थियों से कनेक्ट करके सिंक करें।',
       
-      // General UI
+      // General UI & Theme
       dashboard: 'डैशबोर्ड',
       menu: 'मेनू',
       helpAbout: 'सहायता / विवरण',
       switchRole: 'भूमिका बदलें',
       navigation: 'नेविगेशन',
-      aboutTitle: 'एडुसिंक के बारे में',
-      aboutDesc: 'एडुसिंक ग्रामीण विद्यालयों के लिए डिज़ाइन किया गया एक ऑफ़लाइन शिक्षा मंच है। यह शिक्षकों और विद्यार्थियों को बिना इंटरनेट ब्लूटूथ के माध्यम से पाठ साझा करने, क्विज़ हल करने और अंक सिंक करने की सुविधा देता है।',
+      aboutTitle: 'रूरलराइज़ के बारे में',
+      aboutDesc: 'रूरलराइज़ ग्रामीण विद्यालयों के लिए डिज़ाइन किया गया एक ऑफ़लाइन शिक्षा मंच है। यह शिक्षकों और विद्यार्थियों को बिना इंटरनेट ब्लूटूथ के माध्यम से पाठ साझा करने, क्विज़ हल करने, शंकाएं पूछने और अंक सिंक करने की सुविधा देता है।',
       versionLabel: 'संस्करण',
       appMode: 'मोड',
       offlineMeshReady: '100% ऑफ़लाइन पीयर-टू-पीयर',
@@ -238,6 +277,9 @@ const i18n = {
       switchLanguage: 'Switch to English',
       status: 'स्थिति',
       mode: 'मोड',
+      theme: 'थीम (Theme)',
+      darkMode: 'डार्क मोड (Dark)',
+      lightMode: 'लाइट मोड (Light)',
       offlineModeBadge: '100% ऑफ़लाइन तैयार',
       p2pActiveBadge: 'पीयर-टू-पीयर तैयार'
     }
@@ -257,7 +299,7 @@ const i18n = {
   setLanguage(lang) {
     if (this.translations[lang]) {
       this.currentLang = lang;
-      localStorage.setItem('edusync_lang', lang);
+      localStorage.setItem('ruralrise_lang', lang);
       document.documentElement.lang = lang;
       this.updateDOM();
       window.dispatchEvent(new CustomEvent('languageChanged', { detail: { lang } }));
