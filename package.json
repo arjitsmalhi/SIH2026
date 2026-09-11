@@ -1,13 +1,14 @@
 {
-  "name": "ruralrise",
+  "name": "edurise",
   "version": "1.0.0",
-  "description": "RuralRise — Offline Rural Education Platform with Real Bluetooth P2P Synchronization",
+  "description": "Offline Rural Education Platform with Real Bluetooth P2P Synchronization",
   "main": "index.html",
   "scripts": {
     "build": "node scripts/build-web.js",
     "sync": "node scripts/build-web.js && npx cap sync android",
     "sync:ios": "node scripts/build-web.js && npx cap sync ios",
     "sync:all": "node scripts/build-web.js && npx cap sync",
+    "build:apk": "node scripts/build-web.js && npx cap sync android && cd android && gradlew assembleDebug",
     "android": "npx cap open android",
     "ios": "npx cap open ios",
     "serve": "node scripts/serve.js",
@@ -19,10 +20,9 @@
     "p2p",
     "bluetooth",
     "capacitor",
-    "sih",
-    "ruralrise"
+    "sih"
   ],
-  "author": "RuralRise Team",
+  "author": "EduRise Team",
   "license": "MIT",
   "dependencies": {
     "@capacitor-community/bluetooth-le": "^6.0.0",

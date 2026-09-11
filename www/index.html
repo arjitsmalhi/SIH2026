@@ -1,16 +1,27 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>RuralRise — Offline Education Platform</title>
-  <meta name="description" content="RuralRise allows teachers and students to learn offline and sync educational resources, doubts, and quiz scores peer-to-peer without internet.">
-  <meta name="theme-color" content="#0e0e0e">
+  <title>EduRise — Offline Education Platform</title>
+  <meta name="description" content="EduRise allows teachers and students to learn offline and sync educational resources and quiz scores peer-to-peer without internet.">
+  <meta name="theme-color" content="#000000" id="meta-theme-color">
   
+  <script>
+    (function() {
+      var savedTheme = localStorage.getItem('edurise_theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+      var metaTheme = document.getElementById('meta-theme-color');
+      if (metaTheme) {
+        metaTheme.setAttribute('content', savedTheme === 'light' ? '#f0f4f8' : '#000000');
+      }
+    })();
+  </script>
+
   <!-- PWA Manifest & App Icons -->
   <link rel="manifest" href="manifest.json">
-  <link rel="icon" type="image/png" href="assets/logo.png">
-  <link rel="apple-touch-icon" href="assets/logo.png">
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+  <link rel="apple-touch-icon" href="assets/icon.svg">
   
   <!-- Fonts & Styling -->
   <link rel="stylesheet" href="css/styles.css">
@@ -28,9 +39,13 @@
           <span class="hamburger-bar"></span>
           <span class="hamburger-bar"></span>
         </button>
-        <div style="display: flex; align-items: center; gap: 8px; cursor: pointer;" onclick="window.eduApp && window.eduApp.renderHome()">
-          <img src="assets/logo.png" alt="RuralRise Logo" style="width: 30px; height: 30px; border-radius: 8px; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
-          <span class="brand-title">RuralRise</span>
+        <span class="brand-title">EduRise</span>
+      </div>
+
+      <div class="header-controls">
+        <div class="status-pill">
+          <span class="status-indicator"></span>
+          <span data-i18n="offlineModeBadge">100% Offline</span>
         </div>
       </div>
     </header>
@@ -40,8 +55,7 @@
     <aside class="nav-drawer" id="nav-drawer" aria-label="App Navigation">
       <div class="nav-drawer-header">
         <div class="nav-drawer-brand">
-          <img src="assets/logo.png" alt="RuralRise" class="nav-drawer-logo">
-          <span class="brand-title">RuralRise</span>
+          <span class="brand-title">EduRise</span>
           <span class="nav-drawer-role-badge" id="nav-drawer-role-badge">Offline</span>
         </div>
         <button class="btn-icon nav-drawer-close" id="btn-close-drawer" aria-label="Close menu">&times;</button>
@@ -128,26 +142,21 @@
         </a>
       </nav>
 
-      <!-- Common Drawer Footer Items (Theme Toggle, Language, About, Switch Role) -->
+      <!-- Common Drawer Footer Items (Theme, Language, About, Switch Role) -->
       <div class="nav-drawer-footer">
-        <!-- Theme Toggle Row -->
-        <div class="nav-group-label" data-i18n="theme">Theme</div>
-        <a class="nav-drawer-item nav-drawer-item-action" id="drawer-nav-theme-toggle" role="button" tabindex="0" title="Switch Dark/Light Theme">
+        <div class="nav-group-label" data-i18n="appearance">Appearance</div>
+        <a class="nav-drawer-item nav-drawer-item-action" id="drawer-nav-theme-toggle" role="button" tabindex="0" aria-label="Toggle light and dark mode">
           <span class="nav-item-icon" id="drawer-theme-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
           </span>
           <div style="display: flex; flex-direction: column; flex: 1;">
-            <span class="nav-item-text" id="drawer-theme-text" data-i18n="darkMode">Dark Mode</span>
-            <span style="font-size: 0.72rem; color: var(--text-secondary);" id="drawer-theme-subtext">Tap to switch to Light</span>
+            <span class="nav-item-text" data-i18n="theme">Theme</span>
+            <span style="font-size: 0.72rem; color: var(--text-secondary);" id="drawer-current-theme-text" data-i18n="darkMode">Dark Mode</span>
           </div>
-          <span class="theme-pill-toggle" id="drawer-theme-pill">
-            <span class="theme-indicator-dot"></span>
-            <span id="drawer-theme-status">Dark</span>
-          </span>
+          <span class="nav-item-badge" id="drawer-theme-badge">Dark</span>
         </a>
 
-        <!-- Language Toggle Row -->
-        <div class="nav-group-label" data-i18n="language" style="margin-top: 6px;">Language</div>
+        <div class="nav-group-label" data-i18n="language" style="margin-top: 4px;">Language</div>
         <a class="nav-drawer-item nav-drawer-item-action" id="drawer-nav-lang-toggle" role="button" tabindex="0">
           <span class="nav-item-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
@@ -159,8 +168,7 @@
           <span class="nav-item-badge" id="drawer-lang-badge">Switch</span>
         </a>
 
-        <!-- RuralRise About & Switch Role -->
-        <div class="nav-group-label" style="margin-top: 6px;">RuralRise</div>
+        <div class="nav-group-label" style="margin-top: 4px;">EduRise</div>
         <a class="nav-drawer-item" id="drawer-nav-about" role="button" tabindex="0">
           <span class="nav-item-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
@@ -182,8 +190,8 @@
       <!-- ================= SCREEN 1: ROLE SELECTION ================= -->
       <section class="screen active" id="screen-role-select">
         <div class="welcome-hero">
-          <img src="assets/logo.png" alt="RuralRise Logo" class="hero-icon" style="width: 100px; height: 100px; border-radius: 24px; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25); object-fit: cover;">
-          <h1 class="hero-title" data-i18n="appName">RuralRise</h1>
+          <img src="assets/icon.svg" alt="EduRise Logo" class="hero-icon">
+          <h1 class="hero-title" data-i18n="appName">EduRise</h1>
           <p class="hero-tagline" data-i18n="appTagline">Learn Offline. Sync Anywhere.</p>
         </div>
 
@@ -264,7 +272,7 @@
           </div>
         </div>
 
-        <div class="sync-diff-box" style="margin-top:10px; background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); text-align:center;">
+        <div class="sync-diff-box" style="margin-top:10px; background: #111111; border-color: #262626; text-align:center;">
           <div style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px;">
             Teacher Bluetooth Pairing Code
           </div>
@@ -303,7 +311,7 @@
         <div style="margin-top: auto; display: flex; gap: 8px;">
           <button class="btn-secondary" id="btn-teacher-resources-back" style="flex: 1;" onclick="window.eduApp.goBack()">Back</button>
           <button class="btn-primary" style="flex: 2;" onclick="window.eduApp.renderNearbyRadar()">
-            <span data-i18n="shareWithStudents">Share with Nearby EduSync Devices</span>
+            <span data-i18n="shareWithStudents">Share with Nearby Students</span>
           </button>
         </div>
       </section>
@@ -357,7 +365,7 @@
         </div>
 
         <!-- Dedicated Prominent Connect Card -->
-        <div class="sync-diff-box" style="margin-top:14px; background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); text-align: center; cursor: pointer; padding: 18px;" onclick="window.eduApp.renderNearbyRadar()">
+        <div class="sync-diff-box" style="margin-top:14px; background: #121212; border: 1px solid #282828; text-align: center; cursor: pointer; padding: 18px;" onclick="window.eduApp.renderNearbyRadar()">
           <div style="width: 40px; height: 40px; margin: 0 auto 8px; color: var(--primary); display: flex; align-items: center; justify-content: center;">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
           </div>
@@ -367,7 +375,7 @@
           <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 4px;">
             Scan for nearby Teacher device, pair with 4-digit code, and sync lessons
           </div>
-          <button class="btn-primary" style="margin-top: 12px; width: 100%; font-size: 0.9rem;" onclick="event.stopPropagation(); window.eduApp.renderNearbyRadar();">
+          <button class="btn-primary" style="margin-top: 12px; width: 100%; font-size: 0.9rem;" onclick="event.stopPropagation(); window.eduApp.renderNearbyRadar(true);">
             Search Nearby Devices (Radar)
           </button>
         </div>
@@ -480,9 +488,6 @@
         <div style="font-size:0.85rem; font-weight:700; margin-top:6px;" data-i18n="quizSubmissions">Synced Student Submissions</div>
         <div class="peer-list" id="teacher-submissions-list"></div>
 
-        <div style="font-size:0.85rem; font-weight:700; margin-top:12px; color:var(--primary);" data-i18n="studentDoubts">Student Doubts & Questions</div>
-        <div class="peer-list" id="teacher-doubts-list"></div>
-
         <button class="btn-secondary" id="btn-teacher-analytics-back" style="margin-top:auto;" onclick="window.eduApp.goBack()">Back</button>
       </section>
 
@@ -494,7 +499,7 @@
         </div>
 
         <div style="background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 12px; text-align: center; line-height: 1.4;">
-          Ensure the Teacher device has RuralRise open. Use the Search bar below to search devices by name, code or MAC, then tap Connect.
+          Ensure the Teacher device has EduRise open. Use the Search bar below to search devices by name, code or MAC, then tap Connect.
         </div>
 
         <!-- Nearby Devices Search Bar -->
@@ -517,7 +522,7 @@
             </div>
           </div>
           <div id="radar-status-text" style="margin-top:14px; font-size:0.82rem; color:var(--primary);" data-i18n="searchingNearby">
-            Scanning for nearby RuralRise devices...
+            Scanning for nearby EduRise devices...
           </div>
         </div>
 
@@ -621,13 +626,13 @@
 
           <!-- Dedicated PDF / File Drop Zone -->
           <div class="form-group" id="file-drop-zone-container">
-            <label>Upload PDF or Supporting File</label>
+            <label>Attach File (PDF / Document / Media)</label>
             <div class="file-drop-zone" id="file-drop-zone" onclick="document.getElementById('res-input-file').click()">
               <div class="drop-zone-icon">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               </div>
               <div class="drop-zone-text" id="drop-zone-text">Click to choose file or drag & drop here</div>
-              <div class="drop-zone-subtext">PDF resources are transferred to connected students over Bluetooth</div>
+              <div class="drop-zone-subtext">PDF, DOC, TXT, EPUB, MP3, MP4</div>
               <input type="file" id="res-input-file" style="display:none;" accept=".pdf,.doc,.docx,.txt,.epub,.mp3,.mp4">
             </div>
             <div id="file-selected-badge" style="display:none;" class="file-selected-badge">
@@ -648,7 +653,7 @@
           </div>
 
           <!-- Bluetooth Peer Status & Instant Share Toggle -->
-          <div id="add-res-bt-status" style="background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px; font-size: 0.8rem; display: flex; align-items: center; justify-content: space-between;">
+          <div id="add-res-bt-status" style="background: #111111; border: 1px solid #282828; border-radius: 8px; padding: 10px; font-size: 0.8rem; display: flex; align-items: center; justify-content: space-between;">
             <div>
               <span id="add-res-bt-indicator">Bluetooth: <b>Checking...</b></span>
             </div>
@@ -666,28 +671,19 @@
       </div>
     </div>
 
-    <!-- ================= MODAL: LESSON VIEWER & STUDY DOUBTS ================= -->
+    <!-- ================= MODAL: LESSON VIEWER ================= -->
     <div class="modal-overlay" id="modal-lesson-viewer">
-      <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-content">
         <div class="section-header">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <img src="assets/logo.png" alt="RuralRise" style="width: 22px; height: 22px; border-radius: 4px;">
-            <h3 id="viewer-title" style="font-size:1rem; font-weight:700; color:var(--primary); margin:0;">Lesson Viewer</h3>
-          </div>
+          <h3 id="viewer-title" style="font-size:1rem; font-weight:700; color:var(--primary);">Lesson Viewer</h3>
           <button class="btn-icon" id="btn-close-viewer" type="button">&times;</button>
         </div>
 
         <div class="lesson-viewer-body" id="viewer-content-body"></div>
 
-        <div style="display: flex; gap: 8px; margin-top: 4px;">
-          <button class="btn-secondary" type="button" id="btn-viewer-doubt-toggle" style="flex: 1.2; font-size: 0.85rem;" onclick="window.eduApp.toggleDoubtFormInViewer()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-            <span data-i18n="askDoubt">Ask a Doubt</span>
-          </button>
-          <button class="btn-primary" type="button" style="flex: 1;" onclick="document.getElementById('modal-lesson-viewer').classList.remove('active')" data-i18n="doneReading">
-            Done Reading
-          </button>
-        </div>
+        <button class="btn-primary" type="button" onclick="document.getElementById('modal-lesson-viewer').classList.remove('active')">
+          Done Reading
+        </button>
       </div>
     </div>
 
@@ -730,14 +726,11 @@
           <button class="btn-icon" id="btn-close-about" type="button" style="padding: 4px 8px;">&times;</button>
         </div>
 
-        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 8px;">
-          <img src="assets/logo.png" alt="RuralRise Logo" style="width: 72px; height: 72px; border-radius: 16px; object-fit: cover; box-shadow: 0 8px 20px rgba(0,0,0,0.2);">
-          <h3 style="font-size: 1.3rem; font-weight: 800; color: var(--primary);" data-i18n="aboutTitle">About RuralRise</h3>
-          <p style="font-size: 0.85rem; color: var(--primary); font-weight: 600;" data-i18n="appTagline">Learn Offline. Sync Anywhere.</p>
-        </div>
+        <h3 style="font-size: 1.3rem; font-weight: 800; color: var(--primary);" data-i18n="aboutTitle">About EduRise</h3>
+        <p style="font-size: 0.85rem; color: var(--primary); font-weight: 600; margin-bottom: 12px;" data-i18n="appTagline">Learn Offline. Sync Anywhere.</p>
 
         <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 16px; text-align: left;" data-i18n="aboutDesc">
-          RuralRise is an offline-first educational platform designed for rural schools. It enables teachers and students to share lessons, complete quizzes, ask doubts, and sync student progress peer-to-peer using Bluetooth without needing any internet connection.
+          EduRise is an offline-first educational platform designed for rural schools. It enables teachers and students to share lessons, complete quizzes, and sync student scores peer-to-peer using Bluetooth without needing any internet connection.
         </p>
 
         <div class="sync-diff-box" style="text-align: left; font-size: 0.78rem; margin-bottom: 16px;">

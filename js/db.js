@@ -1,6 +1,6 @@
-// RuralRise Local Database & Offline Storage Layer (IndexedDB with Fallback)
-const DB_NAME = 'RuralRiseOfflineDB';
-const DB_VERSION = 2;
+// EduSync Local Database & Offline Storage Layer (IndexedDB with Fallback)
+const DB_NAME = 'EduSyncOfflineDB';
+const DB_VERSION = 1;
 
 class EduSyncDatabase {
   constructor() {
@@ -39,16 +39,6 @@ class EduSyncDatabase {
         // Sync History Store
         if (!db.objectStoreNames.contains('sync_logs')) {
           db.createObjectStore('sync_logs', { keyPath: 'id', autoIncrement: true });
-        }
-
-        // Student Doubts Store
-        if (!db.objectStoreNames.contains('doubts')) {
-          const doubtStore = db.createObjectStore('doubts', { keyPath: 'doubtId' });
-          doubtStore.createIndex('resourceId', 'resourceId', { unique: false });
-          doubtStore.createIndex('class', 'class', { unique: false });
-          doubtStore.createIndex('subject', 'subject', { unique: false });
-          doubtStore.createIndex('studentId', 'studentId', { unique: false });
-          doubtStore.createIndex('status', 'status', { unique: false });
         }
       };
 
@@ -395,14 +385,8 @@ class EduSyncDatabase {
       const req = store.getAll();
       req.onsuccess = () => {
         let items = req.result || [];
-        if (filterClass) {
-          const normalizedClass = filterClass.toString().trim();
-          items = items.filter(r => r.class?.toString().trim() === normalizedClass);
-        }
-        if (filterSubject && filterSubject !== 'all') {
-          const normalizedSubject = filterSubject.toString().trim().toLowerCase();
-          items = items.filter(r => r.subject?.toString().trim().toLowerCase() === normalizedSubject);
-        }
+        if (filterClass) items = items.filter(r => r.class === filterClass.toString());
+        if (filterSubject && filterSubject !== 'all') items = items.filter(r => r.subject === filterSubject);
         resolve(items);
       };
       req.onerror = () => reject(req.error);
@@ -512,74 +496,6 @@ class EduSyncDatabase {
         }
       };
     }
-  }
-
-  // --- Student Doubts Methods ---
-  async addDoubt(doubt) {
-    return new Promise((resolve, reject) => {
-      const tx = this.db.transaction(['doubts'], 'readwrite');
-      const store = tx.objectStore('doubts');
-      const req = store.put(doubt);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  async getAllDoubts() {
-    return new Promise((resolve, reject) => {
-      const tx = this.db.transaction(['doubts'], 'readonly');
-      const store = tx.objectStore('doubts');
-      const req = store.getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  async getDoubtsByResource(resourceId) {
-    return new Promise((resolve, reject) => {
-      const tx = this.db.transaction(['doubts'], 'readonly');
-      const store = tx.objectStore('doubts');
-      const index = store.index('resourceId');
-      const req = index.getAll(resourceId);
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => {
-        // Fallback to manual filter
-        this.getAllDoubts().then(doubts => {
-          resolve(doubts.filter(d => d.resourceId === resourceId));
-        }).catch(reject);
-      };
-    });
-  }
-
-  async updateDoubtStatus(doubtId, status, answer = null) {
-    return new Promise(async (resolve, reject) => {
-      const tx = this.db.transaction(['doubts'], 'readwrite');
-      const store = tx.objectStore('doubts');
-      const req = store.get(doubtId);
-      req.onsuccess = () => {
-        const doubt = req.result;
-        if (doubt) {
-          doubt.status = status;
-          if (answer) doubt.answer = answer;
-          doubt.updatedAt = new Date().toISOString();
-          store.put(doubt);
-          resolve(doubt);
-        } else {
-          resolve(null);
-        }
-      };
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  async deleteDoubt(doubtId) {
-    return new Promise((resolve, reject) => {
-      const tx = this.db.transaction(['doubts'], 'readwrite');
-      const store = tx.objectStore('doubts');
-      const req = store.delete(doubtId);
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => reject(req.error);
-    });
   }
 
   // --- Sync Manifest Generator ---

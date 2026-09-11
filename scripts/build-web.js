@@ -44,4 +44,31 @@ dirsToCopy.forEach(dir => {
   }
 });
 
+// Sync to Android assets folder if android platform exists
+const androidAssetsPublic = path.resolve(__dirname, '..', 'android', 'app', 'src', 'main', 'assets', 'public');
+const androidAssets = path.resolve(__dirname, '..', 'android', 'app', 'src', 'main', 'assets');
+
+if (fs.existsSync(path.resolve(__dirname, '..', 'android'))) {
+  if (fs.existsSync(androidAssetsPublic)) {
+    fs.rmSync(androidAssetsPublic, { recursive: true, force: true });
+  }
+  fs.mkdirSync(androidAssetsPublic, { recursive: true });
+
+  copyDirRecursive(destDir, androidAssetsPublic);
+
+  // Copy capacitor.config.json to android assets
+  const capConfig = path.resolve(__dirname, '..', 'capacitor.config.json');
+  if (fs.existsSync(capConfig)) {
+    fs.copyFileSync(capConfig, path.join(androidAssets, 'capacitor.config.json'));
+  }
+
+  // Ensure capacitor.plugins.json exists
+  const capPlugins = path.join(androidAssets, 'capacitor.plugins.json');
+  if (!fs.existsSync(capPlugins)) {
+    fs.writeFileSync(capPlugins, '[]', 'utf8');
+  }
+
+  console.log('Android assets synced successfully to android/app/src/main/assets/public/');
+}
+
 console.log('Web assets built successfully to www/');

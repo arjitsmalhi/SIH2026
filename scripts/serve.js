@@ -25,9 +25,20 @@ const server = http.createServer((req, res) => {
 
   let filePath = path.join(PUBLIC_DIR, reqUrl);
 
-  // Serve root APK if requested at /apk or /download-apk
-  if (reqUrl === '/download-apk' || reqUrl === '/EduSync-v1.0-debug.apk') {
-    filePath = path.resolve(__dirname, '..', 'EduSync-v1.0-debug.apk');
+  // Serve root APK if requested at /apk, /download-apk, /edurise.apk, or /edurise-debug.apk
+  if (reqUrl === '/download-apk' || reqUrl === '/apk' || reqUrl === '/edurise.apk' || reqUrl === '/edurise-debug.apk' || reqUrl === '/EduRise-v1.0-debug.apk') {
+    const possiblePaths = [
+      path.resolve(__dirname, '..', 'edurise-debug.apk'),
+      path.resolve(__dirname, '..', 'edurise.apk'),
+      path.resolve(__dirname, '..', 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'edurise-debug.apk'),
+      path.resolve(__dirname, '..', 'EduSync-v1.0-debug.apk')
+    ];
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        filePath = p;
+        break;
+      }
+    }
   }
 
   fs.stat(filePath, (err, stats) => {
@@ -52,6 +63,6 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`EduSync Server is live and running at http://localhost:${PORT}`);
-  console.log(`Direct APK download available at http://localhost:${PORT}/EduSync-v1.0-debug.apk`);
+  console.log(`EduRise Server is live and running at http://localhost:${PORT}`);
+  console.log(`Direct APK download available at http://localhost:${PORT}/edurise.apk`);
 });

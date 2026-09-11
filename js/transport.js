@@ -99,7 +99,7 @@ class EduSyncTransport {
         }
       } else {
         // If Student: request teacher's manifest
-        this.requestTeacherManifest();
+        setTimeout(() => this.requestTeacherManifest(), 400);
       }
     });
 
@@ -211,8 +211,7 @@ class EduSyncTransport {
       const bt = window.Capacitor.Plugins.BluetoothP2P;
 
       if (myRole === 'teacher') {
-        // Teachers advertise for students and scan so two teacher devices can
-        // exchange shared resources through the same pairing flow.
+        // Teacher starts advertising & RFCOMM SPP Server
         try {
           await bt.startAdvertising({
             name: myDeviceName,
@@ -220,7 +219,6 @@ class EduSyncTransport {
             classLevel: myClass,
             pairingCode: pairingCode
           });
-          await bt.startScanning();
           console.log(`[Bluetooth] Teacher Server active. 4-Digit Code: ${pairingCode}`);
         } catch (e) {
           console.error('[Bluetooth] Failed to start advertising:', e);
@@ -228,8 +226,9 @@ class EduSyncTransport {
       } else {
         // Student starts scanning for nearby Teacher devices (BLE + Classic)
         try {
+          await this.fetchPairedDevices();
           await bt.startScanning();
-          console.log('[Bluetooth] Student Scanner active (EduSync devices only)...');
+          console.log('[Bluetooth] Student Scanner active (BLE + Classic Discovery)...');
         } catch (e) {
           console.error('[Bluetooth] Failed to start scanning:', e);
         }
@@ -251,6 +250,7 @@ class EduSyncTransport {
     if (this.isNative) {
       const bt = window.Capacitor.Plugins.BluetoothP2P;
       try {
+        await bt.stopAdvertising();
         await bt.stopScanning();
       } catch (e) {
         console.warn('[Bluetooth] Stop discovery error:', e);
@@ -348,25 +348,20 @@ class EduSyncTransport {
   // PACKET SERIALIZATION & DISPATCH
   // =========================================================================
   async sendPacketOverTransport(packetObj) {
-    const rawString = JSON.stringify(packetObj);
+    try {
+      const rawString = JSON.stringify(packetObj);
 
-    if (this.isNative) {
-      let lastError = null;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const result = await window.Capacitor.Plugins.BluetoothP2P.sendDataChunk({
-            payload: rawString
-          });
-          if (result && result.sent === true) return;
-          lastError = new Error('Bluetooth transport did not accept the packet.');
-        } catch (err) {
-          lastError = err;
+      if (this.isNative) {
+        await window.Capacitor.Plugins.BluetoothP2P.sendDataChunk({
+          payload: rawString
+        });
+      } else {
+        if (this.broadcastChannel) {
+          this.broadcastChannel.postMessage(packetObj);
         }
-        await new Promise(resolve => setTimeout(resolve, 100));
       }
-      throw lastError || new Error('Bluetooth transport did not accept the packet.');
-    } else if (this.broadcastChannel) {
-      this.broadcastChannel.postMessage(packetObj);
+    } catch (err) {
+      console.warn('[Transport] Error sending packet over transport:', err);
     }
   }
 
@@ -501,8 +496,8 @@ class EduSyncTransport {
     this.isPaused = false;
 
     const fullPayload = JSON.stringify(resource);
-    // Keep packets below the BLE notification limit; RFCOMM also accepts these.
-    const CHUNK_SIZE = 64;
+    // 4KB chunks for RFCOMM SPP socket streaming / 400B for BLE
+    const CHUNK_SIZE = 4096;
     const totalChunks = Math.ceil(fullPayload.length / CHUNK_SIZE);
     const transferId = 'tx_' + Math.random().toString(36).substring(2, 9);
 
@@ -531,7 +526,11 @@ class EduSyncTransport {
         meta: meta
       };
 
-      await this.sendPacketOverTransport(packet);
+      try {
+        await this.sendPacketOverTransport(packet);
+      } catch (err) {
+        console.error('[Bluetooth] Packet send failed:', err);
+      }
 
       const percent = Math.min(100, Math.round(((currentIdx + 1) / totalChunks) * 100));
       this.transferProgress = percent;
@@ -549,7 +548,7 @@ class EduSyncTransport {
       }
 
       // Small 15ms buffer sleep between packets for socket reliability
-      await new Promise(r => setTimeout(r, 100));
+      await new Promise(r => setTimeout(r, 15));
     }
 
     this.isTransferring = false;

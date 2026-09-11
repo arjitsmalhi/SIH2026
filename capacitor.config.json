@@ -1,6 +1,6 @@
 {
   "appId": "com.ruraleducation.platform",
-  "appName": "RuralRise",
+  "appName": "EduRise",
   "webDir": "www",
   "bundledWebRuntime": false,
   "server": {

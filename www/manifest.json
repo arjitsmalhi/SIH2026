@@ -1,18 +1,12 @@
 {
-  "name": "RuralRise — Offline Rural Education Platform",
-  "short_name": "RuralRise",
+  "name": "EduRise — Offline Rural Education Platform",
+  "short_name": "EduRise",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0a1128",
-  "theme_color": "#f59e0b",
-  "description": "Learn Offline. Sync Anywhere. RuralRise Offline Education App.",
+  "theme_color": "#1c3144",
+  "description": "Learn Offline. Sync Anywhere. Smart India Hackathon Rural Education App.",
   "icons": [
-    {
-      "src": "assets/logo.png",
-      "sizes": "any",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
     {
       "src": "assets/icon.svg",
       "sizes": "any",
